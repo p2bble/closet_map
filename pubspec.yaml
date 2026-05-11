@@ -1,0 +1,45 @@
+name: closet_map
+description: "옷장지도 - 내 옷이 어디 있는지, 지금 바로 찾아요"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.4
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+
+  # 로컬 DB
+  sqflite: ^2.4.0
+  path: ^1.9.0
+
+  # 파일/이미지
+  path_provider: ^2.1.5
+  image_picker: ^1.1.0
+
+  # 권한
+  permission_handler: ^11.4.0
+
+  # 알림
+  flutter_local_notifications: ^18.0.0
+
+  # 날짜 포맷
+  intl: ^0.19.0
+
+  # 설정 저장
+  shared_preferences: ^2.3.0
+
+  # Firebase
+  firebase_core: ^3.8.0
+  firebase_ai: ^2.2.0
+  firebase_app_check: ^0.3.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true

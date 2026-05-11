@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "296040221341",
+    "project_id": "p2bble-closet-map",
+    "storage_bucket": "p2bble-closet-map.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:296040221341:android:5afa94e892bd7aeac8a274",
+        "android_client_info": {
+          "package_name": "com.p2bble.closet_map"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA-iqYNbdpBdtS4oKH7QSyoiWEjL9tWW0E"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import '../models/storage_place.dart';
 import '../services/database_service.dart';
 import 'place_detail_screen.dart';
+import 'zone_editor_screen.dart';
 
 class PlaceTab extends StatefulWidget {
   const PlaceTab({super.key});
@@ -228,6 +229,19 @@ class _PlaceTabState extends State<PlaceTab> {
     );
   }
 
+  void _openZoneEditor(StoragePlace p) {
+    if (p.imagePath == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('구역 설정을 위해 먼저 사진을 추가해주세요')),
+      );
+      return;
+    }
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => ZoneEditorScreen(place: p)),
+    );
+  }
+
   Future<void> _confirmDelete(StoragePlace place) async {
     final confirm = await showDialog<bool>(
       context: context,
@@ -302,10 +316,12 @@ class _PlaceTabState extends State<PlaceTab> {
                 icon: Icon(Icons.more_vert, size: 18, color: Colors.grey.shade500),
                 onSelected: (v) {
                   if (v == 'edit') _showEditDialog(p);
+                  if (v == 'zones') _openZoneEditor(p);
                   if (v == 'delete') _confirmDelete(p);
                 },
                 itemBuilder: (_) => const [
                   PopupMenuItem(value: 'edit', child: Text('편집')),
+                  PopupMenuItem(value: 'zones', child: Text('구역 설정')),
                   PopupMenuItem(value: 'delete', child: Text('삭제')),
                 ],
               ),

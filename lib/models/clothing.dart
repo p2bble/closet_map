@@ -45,6 +45,7 @@ class Clothing {
   final String? memo;
   final ClothingStatus status;
   final int? storagePlaceId;
+  final int? storageZoneId;
   final String? storageNote;
   final DateTime createdAt;
 
@@ -57,6 +58,7 @@ class Clothing {
     this.memo,
     this.status = ClothingStatus.active,
     this.storagePlaceId,
+    this.storageZoneId,
     this.storageNote,
     required this.createdAt,
   });
@@ -74,6 +76,7 @@ class Clothing {
     Object? memo = _absent,
     ClothingStatus? status,
     Object? storagePlaceId = _absent,
+    Object? storageZoneId = _absent,
     Object? storageNote = _absent,
   }) {
     return Clothing(
@@ -85,6 +88,7 @@ class Clothing {
       memo: memo == _absent ? this.memo : memo as String?,
       status: status ?? this.status,
       storagePlaceId: storagePlaceId == _absent ? this.storagePlaceId : storagePlaceId as int?,
+      storageZoneId: storageZoneId == _absent ? this.storageZoneId : storageZoneId as int?,
       storageNote: storageNote == _absent ? this.storageNote : storageNote as String?,
       createdAt: createdAt,
     );
@@ -99,6 +103,7 @@ class Clothing {
         'memo': memo,
         'status': status.index,
         'storage_place_id': storagePlaceId,
+        'storage_zone_id': storageZoneId,
         'storage_note': storageNote,
         'created_at': createdAt.toIso8601String(),
       };
@@ -120,6 +125,7 @@ class Clothing {
       memo: m['memo'] as String?,
       status: ClothingStatus.values[m['status'] as int],
       storagePlaceId: m['storage_place_id'] as int?,
+      storageZoneId: m['storage_zone_id'] as int?,
       storageNote: m['storage_note'] as String?,
       createdAt: DateTime.parse(m['created_at'] as String),
     );

@@ -204,6 +204,7 @@ class _SeasonTabState extends State<SeasonTab>
     await _db.updateClothing(c.copyWith(
       status: ClothingStatus.active,
       storagePlaceId: null,
+      storageZoneId: null,
     ));
     await _db.insertLog(StorageLog(
       clothingId: c.id!,

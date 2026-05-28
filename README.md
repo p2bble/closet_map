@@ -32,7 +32,20 @@
 
 ## 스크린샷
 
-> 추후 추가 예정
+<table>
+  <tr>
+    <td align="center"><img src="screenshots/01_home.jpg" width="180"/><br/>홈 — 계절 요약</td>
+    <td align="center"><img src="screenshots/02_storage_place.jpg" width="180"/><br/>보관 장소 목록</td>
+    <td align="center"><img src="screenshots/03_add_place.jpg" width="180"/><br/>장소 추가</td>
+    <td align="center"><img src="screenshots/08_ai_classify.jpg" width="180"/><br/>AI 자동 분류</td>
+  </tr>
+  <tr>
+    <td align="center"><img src="screenshots/04_add_clothing.jpg" width="180"/><br/>옷 등록</td>
+    <td align="center"><img src="screenshots/05_my_closet.jpg" width="180"/><br/>내 옷 목록</td>
+    <td align="center"><img src="screenshots/06_season_store.jpg" width="180"/><br/>계절 전환 — 보관하기</td>
+    <td align="center"><img src="screenshots/07_season_takeout.jpg" width="180"/><br/>계절 전환 — 꺼내기</td>
+  </tr>
+</table>
 
 <br>
 
@@ -85,14 +98,14 @@ lib/
 
 | 버전 | 내용 |
 |---|---|
-| v1.1.0 | 옷장 구역 맵 추가 — 사진 위 드래그로 구역 그리기, 구역별 보관 옷 조회 |
-| v1.0.0 | 최초 출시 — 보관 장소/옷 관리, AI 자동 분류, 계절 전환 |
+| v1.1.0 | 옷장 구역 맵 — 사진 위 드래그로 서랍/행거/선반 구역 그리기, 구역 이름 지정, 구역별 보관 옷 조회·추가·제거 |
+| v1.0.0 | 최초 출시 — 보관 장소/옷 관리, AI 자동 분류(Gemini), 계절 전환 체크리스트 |
 
 <br>
 
 ## Google Play
 
-> 비공개 테스트 진행 중
+> Google Play 출시 완료 (v1.1.0 — 옷장 구역 맵 업데이트 반영)
 
 <br>
 

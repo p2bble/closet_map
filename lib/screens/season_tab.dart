@@ -211,6 +211,7 @@ class _SeasonTabState extends State<SeasonTab>
       action: StorageAction.retrieved,
       actionAt: DateTime.now(),
     ));
+    await _db.incrementWearCount(c.id!);
     _load();
   }
 

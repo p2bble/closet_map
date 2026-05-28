@@ -21,7 +21,7 @@ class DatabaseService {
     final dbPath = await getDatabasesPath();
     return openDatabase(
       join(dbPath, 'closet_map.db'),
-      version: 2,
+      version: 3,
       onCreate: (db, _) async {
         await db.execute('''
           CREATE TABLE storage_places (
@@ -59,6 +59,7 @@ class DatabaseService {
             storage_zone_id INTEGER,
             storage_note TEXT,
             created_at TEXT NOT NULL,
+            wear_count INTEGER NOT NULL DEFAULT 0,
             FOREIGN KEY (storage_place_id) REFERENCES storage_places(id),
             FOREIGN KEY (storage_zone_id) REFERENCES storage_zones(id)
           )
@@ -96,6 +97,11 @@ class DatabaseService {
           ''');
           await db.execute(
             'ALTER TABLE clothes ADD COLUMN storage_zone_id INTEGER',
+          );
+        }
+        if (oldVersion < 3) {
+          await db.execute(
+            'ALTER TABLE clothes ADD COLUMN wear_count INTEGER NOT NULL DEFAULT 0',
           );
         }
       },
@@ -152,6 +158,7 @@ class DatabaseService {
 
   Future<List<Clothing>> getClothes({
     ClothingStatus? status,
+    ClothingSeason? season,
     int? placeId,
     int? zoneId,
   }) async {
@@ -160,6 +167,10 @@ class DatabaseService {
     if (status != null) {
       conditions.add('status = ?');
       args.add(status.index);
+    }
+    if (season != null) {
+      conditions.add('seasons LIKE ?');
+      args.add('%${season.index}%');
     }
     if (placeId != null) {
       conditions.add('storage_place_id = ?');
@@ -178,6 +189,12 @@ class DatabaseService {
     );
     return rows.map(Clothing.fromMap).toList();
   }
+
+  Future<void> incrementWearCount(int id) async =>
+      (await db).rawUpdate(
+        'UPDATE clothes SET wear_count = wear_count + 1 WHERE id = ?',
+        [id],
+      );
 
   Future<void> updateClothing(Clothing c) async =>
       (await db).update('clothes', c.toMap(), where: 'id = ?', whereArgs: [c.id]);

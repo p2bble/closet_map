@@ -48,6 +48,7 @@ class Clothing {
   final int? storageZoneId;
   final String? storageNote;
   final DateTime createdAt;
+  final int wearCount;
 
   const Clothing({
     this.id,
@@ -61,6 +62,7 @@ class Clothing {
     this.storageZoneId,
     this.storageNote,
     required this.createdAt,
+    this.wearCount = 0,
   });
 
   bool get isStored => status == ClothingStatus.stored;
@@ -78,6 +80,7 @@ class Clothing {
     Object? storagePlaceId = _absent,
     Object? storageZoneId = _absent,
     Object? storageNote = _absent,
+    int? wearCount,
   }) {
     return Clothing(
       id: id ?? this.id,
@@ -91,6 +94,7 @@ class Clothing {
       storageZoneId: storageZoneId == _absent ? this.storageZoneId : storageZoneId as int?,
       storageNote: storageNote == _absent ? this.storageNote : storageNote as String?,
       createdAt: createdAt,
+      wearCount: wearCount ?? this.wearCount,
     );
   }
 
@@ -106,6 +110,7 @@ class Clothing {
         'storage_zone_id': storageZoneId,
         'storage_note': storageNote,
         'created_at': createdAt.toIso8601String(),
+        'wear_count': wearCount,
       };
 
   factory Clothing.fromMap(Map<String, dynamic> m) {
@@ -128,6 +133,7 @@ class Clothing {
       storageZoneId: m['storage_zone_id'] as int?,
       storageNote: m['storage_note'] as String?,
       createdAt: DateTime.parse(m['created_at'] as String),
+      wearCount: (m['wear_count'] as int?) ?? 0,
     );
   }
 }

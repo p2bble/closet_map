@@ -105,7 +105,9 @@ lib/
 
 ## Google Play
 
-> Google Play 출시 완료 (v1.1.0 — 옷장 구역 맵 업데이트 반영)
+[![Google Play](https://img.shields.io/badge/Google_Play-출시완료-414141?style=for-the-badge&logo=google-play&logoColor=white)](https://play.google.com/store/apps/details?id=com.p2bble.closet_map)
+
+> v1.1.0 — 옷장 구역 맵 업데이트 반영
 
 <br>
 

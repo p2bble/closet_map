@@ -205,6 +205,7 @@ class DatabaseService {
     ClothingStatus? status,
     ClothingSeason? season,
     ClothingColor? color,
+    String? nameQuery,
     int? placeId,
     int? zoneId,
   }) async {
@@ -222,6 +223,10 @@ class DatabaseService {
       conditions.add('color = ?');
       args.add(color.index);
     }
+    if (nameQuery != null && nameQuery.isNotEmpty) {
+      conditions.add('name LIKE ?');
+      args.add('%$nameQuery%');
+    }
     if (placeId != null) {
       conditions.add('storage_place_id = ?');
       args.add(placeId);
@@ -238,6 +243,63 @@ class DatabaseService {
       orderBy: 'created_at DESC',
     );
     return rows.map(Clothing.fromMap).toList();
+  }
+
+  Future<void> bulkStore(
+    List<int> ids,
+    int placeId, {
+    bool washedBefore = false,
+    bool conditionGood = true,
+    bool mothballAdded = false,
+    String? memo,
+  }) async {
+    final d = await db;
+    final now = DateTime.now().toIso8601String();
+    await d.transaction((txn) async {
+      for (final id in ids) {
+        await txn.update(
+          'clothes',
+          {'status': ClothingStatus.stored.index, 'storage_place_id': placeId},
+          where: 'id = ?',
+          whereArgs: [id],
+        );
+        await txn.insert('storage_logs', {
+          'clothing_id': id,
+          'storage_place_id': placeId,
+          'action': StorageAction.stored.index,
+          'washed_before': washedBefore ? 1 : 0,
+          'condition_good': conditionGood ? 1 : 0,
+          'mothball_added': mothballAdded ? 1 : 0,
+          'memo': memo,
+          'action_at': now,
+        });
+      }
+    });
+  }
+
+  Future<void> bulkRetrieve(List<int> ids) async {
+    final d = await db;
+    final now = DateTime.now().toIso8601String();
+    await d.transaction((txn) async {
+      for (final id in ids) {
+        await txn.rawUpdate('''
+          UPDATE clothes
+          SET status = ?, storage_place_id = NULL, storage_zone_id = NULL,
+              wear_count = wear_count + 1, last_worn_at = ?
+          WHERE id = ?
+        ''', [ClothingStatus.active.index, now, id]);
+        await txn.insert('storage_logs', {
+          'clothing_id': id,
+          'storage_place_id': null,
+          'action': StorageAction.retrieved.index,
+          'washed_before': null,
+          'condition_good': null,
+          'mothball_added': null,
+          'memo': null,
+          'action_at': now,
+        });
+      }
+    });
   }
 
   Future<List<Clothing>> getNeglectedClothes() async {

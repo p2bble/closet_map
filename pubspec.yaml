@@ -1,7 +1,7 @@
 name: closet_map
 description: "옷장지도 - 내 옷이 어디 있는지, 지금 바로 찾아요"
 publish_to: 'none'
-version: 1.3.0+4
+version: 1.4.0+5
 
 environment:
   sdk: ^3.11.4

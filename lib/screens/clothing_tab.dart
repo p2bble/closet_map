@@ -17,11 +17,15 @@ class ClothingTab extends StatefulWidget {
 
 class _ClothingTabState extends State<ClothingTab> {
   final _db = DatabaseService();
+  final _searchCtrl = TextEditingController();
   List<Clothing> _all = [];
   List<StoragePlace> _places = [];
   ClothingStatus? _filterStatus;
   ClothingSeason? _filterSeason;
   ClothingColor? _filterColor;
+  String _searchQuery = '';
+  bool _showSearch = false;
+  bool _isGridView = false;
 
   @override
   void initState() {
@@ -29,11 +33,18 @@ class _ClothingTabState extends State<ClothingTab> {
     _load();
   }
 
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
   Future<void> _load() async {
     final list = await _db.getClothes(
       status: _filterStatus,
       season: _filterSeason,
       color: _filterColor,
+      nameQuery: _searchQuery,
     );
     final places = await _db.getPlaces();
     if (mounted) setState(() { _all = list; _places = places; });
@@ -870,17 +881,31 @@ class _ClothingTabState extends State<ClothingTab> {
     return Scaffold(
       body: Column(
         children: [
-          _buildStatusFilter(),
+          _buildTopBar(),
+          if (_showSearch) _buildSearchBar(),
           _buildSeasonFilter(),
           _buildColorFilter(),
           Expanded(
             child: _all.isEmpty
                 ? _buildEmpty()
-                : ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 80),
-                    itemCount: _all.length,
-                    itemBuilder: (_, i) => _clothingCard(_all[i]),
-                  ),
+                : _isGridView
+                    ? GridView.builder(
+                        padding: const EdgeInsets.fromLTRB(12, 4, 12, 80),
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          crossAxisSpacing: 10,
+                          mainAxisSpacing: 10,
+                          childAspectRatio: 0.68,
+                        ),
+                        itemCount: _all.length,
+                        itemBuilder: (_, i) => _clothingGridCard(_all[i]),
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.fromLTRB(12, 0, 12, 80),
+                        itemCount: _all.length,
+                        itemBuilder: (_, i) => _clothingCard(_all[i]),
+                      ),
           ),
         ],
       ),
@@ -892,9 +917,9 @@ class _ClothingTabState extends State<ClothingTab> {
     );
   }
 
-  Widget _buildStatusFilter() {
+  Widget _buildTopBar() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+      padding: const EdgeInsets.fromLTRB(12, 12, 8, 0),
       child: Row(
         children: [
           _statusChip('전체', null),
@@ -902,7 +927,67 @@ class _ClothingTabState extends State<ClothingTab> {
           _statusChip('착용 중', ClothingStatus.active),
           const SizedBox(width: 8),
           _statusChip('보관 중', ClothingStatus.stored),
+          const Spacer(),
+          IconButton(
+            icon: Icon(
+              _showSearch ? Icons.search_off : Icons.search,
+              size: 20,
+            ),
+            tooltip: _showSearch ? '검색 닫기' : '이름 검색',
+            onPressed: () {
+              setState(() {
+                _showSearch = !_showSearch;
+                if (!_showSearch) {
+                  _searchQuery = '';
+                  _searchCtrl.clear();
+                }
+              });
+              _load();
+            },
+          ),
+          IconButton(
+            icon: Icon(
+              _isGridView ? Icons.view_list : Icons.grid_view,
+              size: 20,
+            ),
+            tooltip: _isGridView ? '리스트 보기' : '그리드 보기',
+            onPressed: () => setState(() => _isGridView = !_isGridView),
+          ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSearchBar() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+      child: TextField(
+        controller: _searchCtrl,
+        autofocus: true,
+        decoration: InputDecoration(
+          hintText: '옷 이름으로 검색',
+          prefixIcon: const Icon(Icons.search, size: 20),
+          suffixIcon: _searchQuery.isNotEmpty
+              ? IconButton(
+                  icon: const Icon(Icons.clear, size: 18),
+                  onPressed: () {
+                    _searchCtrl.clear();
+                    setState(() => _searchQuery = '');
+                    _load();
+                  },
+                )
+              : null,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
+          contentPadding:
+              const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+          isDense: true,
+        ),
+        onChanged: (v) {
+          setState(() => _searchQuery = v);
+          _load();
+        },
       ),
     );
   }
@@ -1097,6 +1182,131 @@ class _ClothingTabState extends State<ClothingTab> {
                 PopupMenuItem(value: 'edit', child: Text('편집')),
                 PopupMenuItem(value: 'delete', child: Text('삭제')),
               ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _clothingGridCard(Clothing c) {
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: c.imagePath != null ? () => _showImageDialog(c.imagePath!) : null,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  c.imagePath != null
+                      ? Image.file(File(c.imagePath!), fit: BoxFit.cover)
+                      : Container(
+                          color: c.color != null
+                              ? Color(c.color!.colorValue)
+                              : Colors.grey.shade100,
+                          child: Icon(
+                            Icons.checkroom,
+                            size: 44,
+                            color: c.color != null
+                                ? Colors.white.withAlpha(180)
+                                : Colors.grey.shade300,
+                          ),
+                        ),
+                  // 상태 배지
+                  Positioned(
+                    top: 6,
+                    right: 6,
+                    child: GestureDetector(
+                      onTap: () => c.isStored ? _retrieve(c) : _startStore(c),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: c.isStored
+                              ? Colors.blue.shade50.withAlpha(230)
+                              : Colors.green.shade50.withAlpha(230),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          c.isStored ? '보관' : '착용',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: c.isStored ? Colors.blue : Colors.green,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  // 색상 dot (사진 있을 때만)
+                  if (c.imagePath != null && c.color != null)
+                    Positioned(
+                      bottom: 6,
+                      left: 6,
+                      child: Container(
+                        width: 12,
+                        height: 12,
+                        decoration: BoxDecoration(
+                          color: Color(c.color!.colorValue),
+                          shape: BoxShape.circle,
+                          border:
+                              Border.all(color: Colors.white, width: 1.5),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 6, 4, 6),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          c.name,
+                          style: const TextStyle(
+                              fontSize: 12, fontWeight: FontWeight.w600),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Text(
+                          [
+                            c.category.label,
+                            if (c.wearCount > 0) '${c.wearCount}회',
+                          ].join(' · '),
+                          style: TextStyle(
+                              fontSize: 10, color: Colors.grey.shade500),
+                        ),
+                        if (c.costPerWear != null)
+                          Text(
+                            '₩${c.costPerWear!.round()}/착용',
+                            style: TextStyle(
+                                fontSize: 10,
+                                color: Theme.of(context).colorScheme.primary),
+                          ),
+                      ],
+                    ),
+                  ),
+                  PopupMenuButton<String>(
+                    icon: Icon(Icons.more_vert,
+                        size: 16, color: Colors.grey.shade500),
+                    onSelected: (v) {
+                      if (v == 'edit') _showEditSheet(c);
+                      if (v == 'delete') _confirmDelete(c);
+                    },
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(value: 'edit', child: Text('편집')),
+                      PopupMenuItem(value: 'delete', child: Text('삭제')),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ],
         ),

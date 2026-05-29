@@ -3,9 +3,9 @@ import '../models/clothing.dart';
 class SeasonService {
   static ClothingSeason currentSeason() {
     final month = DateTime.now().month;
-    if (month >= 3 && month <= 5) return ClothingSeason.spring;
-    if (month >= 6 && month <= 8) return ClothingSeason.summer;
-    if (month >= 9 && month <= 11) return ClothingSeason.autumn;
+    if (month >= 3 && month <= 4) return ClothingSeason.spring;
+    if (month >= 5 && month <= 8) return ClothingSeason.summer;
+    if (month >= 9 && month <= 10) return ClothingSeason.autumn;
     return ClothingSeason.winter;
   }
 

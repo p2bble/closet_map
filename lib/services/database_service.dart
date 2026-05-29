@@ -1,6 +1,7 @@
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import '../models/clothing.dart';
+import '../models/outfit.dart';
 import '../models/storage_place.dart';
 import '../models/storage_log.dart';
 import '../models/storage_zone.dart';
@@ -21,7 +22,7 @@ class DatabaseService {
     final dbPath = await getDatabasesPath();
     return openDatabase(
       join(dbPath, 'closet_map.db'),
-      version: 3,
+      version: 4,
       onCreate: (db, _) async {
         await db.execute('''
           CREATE TABLE storage_places (
@@ -52,14 +53,19 @@ class DatabaseService {
             name TEXT NOT NULL,
             category INTEGER NOT NULL,
             seasons TEXT NOT NULL,
+            color INTEGER,
             image_path TEXT,
             memo TEXT,
+            brand TEXT,
+            purchase_price REAL,
+            purchase_date TEXT,
             status INTEGER NOT NULL DEFAULT 0,
             storage_place_id INTEGER,
             storage_zone_id INTEGER,
             storage_note TEXT,
             created_at TEXT NOT NULL,
             wear_count INTEGER NOT NULL DEFAULT 0,
+            last_worn_at TEXT,
             FOREIGN KEY (storage_place_id) REFERENCES storage_places(id),
             FOREIGN KEY (storage_zone_id) REFERENCES storage_zones(id)
           )
@@ -75,6 +81,22 @@ class DatabaseService {
             mothball_added INTEGER,
             memo TEXT,
             action_at TEXT NOT NULL,
+            FOREIGN KEY (clothing_id) REFERENCES clothes(id)
+          )
+        ''');
+        await db.execute('''
+          CREATE TABLE outfits (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT,
+            memo TEXT,
+            created_at TEXT NOT NULL
+          )
+        ''');
+        await db.execute('''
+          CREATE TABLE outfit_items (
+            outfit_id INTEGER NOT NULL,
+            clothing_id INTEGER NOT NULL,
+            FOREIGN KEY (outfit_id) REFERENCES outfits(id),
             FOREIGN KEY (clothing_id) REFERENCES clothes(id)
           )
         ''');
@@ -103,6 +125,29 @@ class DatabaseService {
           await db.execute(
             'ALTER TABLE clothes ADD COLUMN wear_count INTEGER NOT NULL DEFAULT 0',
           );
+        }
+        if (oldVersion < 4) {
+          await db.execute('ALTER TABLE clothes ADD COLUMN color INTEGER');
+          await db.execute('ALTER TABLE clothes ADD COLUMN brand TEXT');
+          await db.execute('ALTER TABLE clothes ADD COLUMN purchase_price REAL');
+          await db.execute('ALTER TABLE clothes ADD COLUMN purchase_date TEXT');
+          await db.execute('ALTER TABLE clothes ADD COLUMN last_worn_at TEXT');
+          await db.execute('''
+            CREATE TABLE outfits (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              name TEXT,
+              memo TEXT,
+              created_at TEXT NOT NULL
+            )
+          ''');
+          await db.execute('''
+            CREATE TABLE outfit_items (
+              outfit_id INTEGER NOT NULL,
+              clothing_id INTEGER NOT NULL,
+              FOREIGN KEY (outfit_id) REFERENCES outfits(id),
+              FOREIGN KEY (clothing_id) REFERENCES clothes(id)
+            )
+          ''');
         }
       },
     );
@@ -159,6 +204,7 @@ class DatabaseService {
   Future<List<Clothing>> getClothes({
     ClothingStatus? status,
     ClothingSeason? season,
+    ClothingColor? color,
     int? placeId,
     int? zoneId,
   }) async {
@@ -171,6 +217,10 @@ class DatabaseService {
     if (season != null) {
       conditions.add('seasons LIKE ?');
       args.add('%${season.index}%');
+    }
+    if (color != null) {
+      conditions.add('color = ?');
+      args.add(color.index);
     }
     if (placeId != null) {
       conditions.add('storage_place_id = ?');
@@ -190,10 +240,28 @@ class DatabaseService {
     return rows.map(Clothing.fromMap).toList();
   }
 
+  Future<List<Clothing>> getNeglectedClothes() async {
+    final sixMonthsAgo = DateTime.now()
+        .subtract(const Duration(days: 180))
+        .toIso8601String();
+    final oneYearAgo = DateTime.now()
+        .subtract(const Duration(days: 365))
+        .toIso8601String();
+    final rows = await (await db).rawQuery('''
+      SELECT * FROM clothes
+      WHERE status = ${ClothingStatus.active.index} AND (
+        (wear_count = 0 AND created_at < ?) OR
+        (wear_count > 0 AND (last_worn_at IS NULL OR last_worn_at < ?))
+      )
+      ORDER BY created_at ASC
+    ''', [sixMonthsAgo, oneYearAgo]);
+    return rows.map(Clothing.fromMap).toList();
+  }
+
   Future<void> incrementWearCount(int id) async =>
       (await db).rawUpdate(
-        'UPDATE clothes SET wear_count = wear_count + 1 WHERE id = ?',
-        [id],
+        'UPDATE clothes SET wear_count = wear_count + 1, last_worn_at = ? WHERE id = ?',
+        [DateTime.now().toIso8601String(), id],
       );
 
   Future<void> updateClothing(Clothing c) async =>
@@ -219,5 +287,41 @@ class DatabaseService {
         'SELECT COUNT(*) as cnt FROM clothes WHERE storage_place_id = ? AND status = ?',
         [placeId, ClothingStatus.stored.index]);
     return result.first['cnt'] as int;
+  }
+
+  // ── Outfit ────────────────────────────────────
+  Future<int> insertOutfit(Outfit o) async =>
+      (await db).insert('outfits', o.toMap()..remove('id'));
+
+  Future<void> insertOutfitItem(int outfitId, int clothingId) async =>
+      (await db).insert('outfit_items', {
+        'outfit_id': outfitId,
+        'clothing_id': clothingId,
+      });
+
+  Future<List<(Outfit, List<Clothing>)>> getRecentOutfits({int limit = 5}) async {
+    final d = await db;
+    final outfitRows = await d.query(
+      'outfits',
+      orderBy: 'created_at DESC',
+      limit: limit,
+    );
+    final result = <(Outfit, List<Clothing>)>[];
+    for (final row in outfitRows) {
+      final outfit = Outfit.fromMap(row);
+      final clothingRows = await d.rawQuery('''
+        SELECT c.* FROM clothes c
+        INNER JOIN outfit_items oi ON c.id = oi.clothing_id
+        WHERE oi.outfit_id = ?
+      ''', [outfit.id]);
+      result.add((outfit, clothingRows.map(Clothing.fromMap).toList()));
+    }
+    return result;
+  }
+
+  Future<void> deleteOutfit(int outfitId) async {
+    final d = await db;
+    await d.delete('outfit_items', where: 'outfit_id = ?', whereArgs: [outfitId]);
+    await d.delete('outfits', where: 'id = ?', whereArgs: [outfitId]);
   }
 }

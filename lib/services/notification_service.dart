@@ -24,4 +24,22 @@ class NotificationService {
     );
     await _plugin.show(1, '옷장지도', message, details);
   }
+
+  Future<void> showNeglectedAlert(int count) async {
+    const details = NotificationDetails(
+      android: AndroidNotificationDetails(
+        'neglected_clothes',
+        '방치 옷 알림',
+        channelDescription: '오래 입지 않은 옷 정리 알림',
+        importance: Importance.defaultImportance,
+        priority: Priority.defaultPriority,
+      ),
+    );
+    await _plugin.show(
+      2,
+      '옷장지도',
+      '오래 입지 않은 옷이 $count벌 있어요. 정리할 때가 됐을지도 몰라요!',
+      details,
+    );
+  }
 }

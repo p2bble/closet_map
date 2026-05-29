@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import '../models/clothing.dart';
 import '../models/storage_log.dart';
@@ -20,6 +21,7 @@ class _ClothingTabState extends State<ClothingTab> {
   List<StoragePlace> _places = [];
   ClothingStatus? _filterStatus;
   ClothingSeason? _filterSeason;
+  ClothingColor? _filterColor;
 
   @override
   void initState() {
@@ -28,7 +30,11 @@ class _ClothingTabState extends State<ClothingTab> {
   }
 
   Future<void> _load() async {
-    final list = await _db.getClothes(status: _filterStatus, season: _filterSeason);
+    final list = await _db.getClothes(
+      status: _filterStatus,
+      season: _filterSeason,
+      color: _filterColor,
+    );
     final places = await _db.getPlaces();
     if (mounted) setState(() { _all = list; _places = places; });
   }
@@ -74,12 +80,71 @@ class _ClothingTabState extends State<ClothingTab> {
     );
   }
 
+  // ── 색상 선택 위젯 ─────────────────────────────
+  Widget _colorPicker({
+    required ClothingColor? selected,
+    required void Function(ClothingColor?) onChanged,
+  }) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: ClothingColor.values.map((c) {
+        final isSelected = selected == c;
+        final bgColor = Color(c.colorValue);
+        return GestureDetector(
+          onTap: () => onChanged(isSelected ? null : c),
+          child: Tooltip(
+            message: c.label,
+            child: Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: bgColor,
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: isSelected
+                      ? Theme.of(context).colorScheme.primary
+                      : Colors.grey.shade300,
+                  width: isSelected ? 2.5 : 1,
+                ),
+              ),
+              child: isSelected
+                  ? Icon(
+                      Icons.check,
+                      size: 16,
+                      color: c == ClothingColor.white || c == ClothingColor.yellow
+                          ? Colors.black54
+                          : Colors.white,
+                    )
+                  : null,
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  // ── 날짜 선택 ─────────────────────────────────
+  Future<DateTime?> _pickDate(BuildContext ctx, DateTime? initial) async {
+    return showDatePicker(
+      context: ctx,
+      initialDate: initial ?? DateTime.now(),
+      firstDate: DateTime(2000),
+      lastDate: DateTime.now(),
+      helpText: '구매 날짜 선택',
+    );
+  }
+
   Future<void> _showAddSheet() async {
     final nameCtrl = TextEditingController();
     final memoCtrl = TextEditingController();
+    final brandCtrl = TextEditingController();
+    final priceCtrl = TextEditingController();
     String? imagePath;
     ClothingCategory category = ClothingCategory.top;
     final seasons = <ClothingSeason>{};
+    ClothingColor? selectedColor;
+    DateTime? purchaseDate;
     bool isClassifying = false;
     ClothingStatus newStatus = ClothingStatus.active;
     StoragePlace? selectedPlace;
@@ -100,7 +165,6 @@ class _ClothingTabState extends State<ClothingTab> {
                 const Text('옷 등록',
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 12),
-                // 상태 선택
                 Row(
                   children: [
                     ChoiceChip(
@@ -120,7 +184,6 @@ class _ClothingTabState extends State<ClothingTab> {
                   ],
                 ),
                 const SizedBox(height: 12),
-                // 사진
                 GestureDetector(
                   onTap: () async {
                     final source = await _pickImageSource();
@@ -164,6 +227,7 @@ class _ClothingTabState extends State<ClothingTab> {
                                 setS(() {
                                   category = result.category;
                                   seasons..clear()..addAll(result.seasons);
+                                  if (result.color != null) selectedColor = result.color;
                                   if (result.suggestedName != null &&
                                       nameCtrl.text.isEmpty) {
                                     nameCtrl.text = result.suggestedName!;
@@ -222,13 +286,64 @@ class _ClothingTabState extends State<ClothingTab> {
                   }).toList(),
                 ),
                 const SizedBox(height: 12),
+                const Text('색상', style: TextStyle(fontSize: 13, color: Colors.grey)),
+                const SizedBox(height: 8),
+                _colorPicker(
+                  selected: selectedColor,
+                  onChanged: (c) => setS(() => selectedColor = c),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: brandCtrl,
+                  decoration: const InputDecoration(
+                      labelText: '브랜드 (선택)', border: OutlineInputBorder()),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: priceCtrl,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                        decoration: const InputDecoration(
+                          labelText: '구매가격 (선택)',
+                          prefixText: '₩ ',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: InkWell(
+                        onTap: () async {
+                          final d = await _pickDate(ctx, purchaseDate);
+                          if (d != null) setS(() => purchaseDate = d);
+                        },
+                        child: InputDecorator(
+                          decoration: const InputDecoration(
+                            labelText: '구매 날짜 (선택)',
+                            border: OutlineInputBorder(),
+                            suffixIcon: Icon(Icons.calendar_today, size: 16),
+                          ),
+                          child: Text(
+                            purchaseDate != null
+                                ? '${purchaseDate!.year}.${purchaseDate!.month.toString().padLeft(2, '0')}'
+                                : '',
+                            style: const TextStyle(fontSize: 14),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
                 TextField(
                   controller: memoCtrl,
                   decoration: const InputDecoration(
                       labelText: '메모 (선택)', border: OutlineInputBorder()),
                   maxLines: 2,
                 ),
-                // 보관 중일 때 장소 선택
                 if (newStatus == ClothingStatus.stored) ...[
                   const Divider(height: 24),
                   const Text('보관 장소',
@@ -262,14 +377,21 @@ class _ClothingTabState extends State<ClothingTab> {
                           _places.isNotEmpty) {
                         return;
                       }
+                      final price = double.tryParse(priceCtrl.text);
                       final clothing = Clothing(
                         name: nameCtrl.text.trim(),
                         category: category,
                         seasons: seasons.toList(),
+                        color: selectedColor,
                         imagePath: imagePath,
                         memo: memoCtrl.text.trim().isEmpty
                             ? null
                             : memoCtrl.text.trim(),
+                        brand: brandCtrl.text.trim().isEmpty
+                            ? null
+                            : brandCtrl.text.trim(),
+                        purchasePrice: (price != null && price > 0) ? price : null,
+                        purchaseDate: purchaseDate,
                         status: newStatus,
                         storagePlaceId: selectedPlace?.id,
                         createdAt: DateTime.now(),
@@ -303,9 +425,17 @@ class _ClothingTabState extends State<ClothingTab> {
   Future<void> _showEditSheet(Clothing c) async {
     final nameCtrl = TextEditingController(text: c.name);
     final memoCtrl = TextEditingController(text: c.memo ?? '');
+    final brandCtrl = TextEditingController(text: c.brand ?? '');
+    final priceCtrl = TextEditingController(
+      text: c.purchasePrice != null
+          ? c.purchasePrice!.toStringAsFixed(0)
+          : '',
+    );
     String? imagePath = c.imagePath;
     ClothingCategory category = c.category;
     final seasons = <ClothingSeason>{...c.seasons};
+    ClothingColor? selectedColor = c.color;
+    DateTime? purchaseDate = c.purchaseDate;
     bool isClassifying = false;
 
     await showModalBottomSheet(
@@ -367,6 +497,7 @@ class _ClothingTabState extends State<ClothingTab> {
                                 setS(() {
                                   category = result.category;
                                   seasons..clear()..addAll(result.seasons);
+                                  if (result.color != null) selectedColor = result.color;
                                   if (result.suggestedName != null &&
                                       nameCtrl.text.isEmpty) {
                                     nameCtrl.text = result.suggestedName!;
@@ -418,6 +549,58 @@ class _ClothingTabState extends State<ClothingTab> {
                   }).toList(),
                 ),
                 const SizedBox(height: 12),
+                const Text('색상', style: TextStyle(fontSize: 13, color: Colors.grey)),
+                const SizedBox(height: 8),
+                _colorPicker(
+                  selected: selectedColor,
+                  onChanged: (c) => setS(() => selectedColor = c),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: brandCtrl,
+                  decoration: const InputDecoration(
+                      labelText: '브랜드 (선택)', border: OutlineInputBorder()),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: priceCtrl,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                        decoration: const InputDecoration(
+                          labelText: '구매가격 (선택)',
+                          prefixText: '₩ ',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: InkWell(
+                        onTap: () async {
+                          final d = await _pickDate(ctx, purchaseDate);
+                          if (d != null) setS(() => purchaseDate = d);
+                        },
+                        child: InputDecorator(
+                          decoration: const InputDecoration(
+                            labelText: '구매 날짜 (선택)',
+                            border: OutlineInputBorder(),
+                            suffixIcon: Icon(Icons.calendar_today, size: 16),
+                          ),
+                          child: Text(
+                            purchaseDate != null
+                                ? '${purchaseDate!.year}.${purchaseDate!.month.toString().padLeft(2, '0')}'
+                                : '',
+                            style: const TextStyle(fontSize: 14),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
                 TextField(
                   controller: memoCtrl,
                   decoration: const InputDecoration(
@@ -430,14 +613,21 @@ class _ClothingTabState extends State<ClothingTab> {
                   child: ElevatedButton(
                     onPressed: () async {
                       if (nameCtrl.text.trim().isEmpty) return;
+                      final price = double.tryParse(priceCtrl.text);
                       await _db.updateClothing(c.copyWith(
                         name: nameCtrl.text.trim(),
                         category: category,
                         seasons: seasons.toList(),
+                        color: selectedColor,
                         imagePath: imagePath,
                         memo: memoCtrl.text.trim().isEmpty
                             ? null
                             : memoCtrl.text.trim(),
+                        brand: brandCtrl.text.trim().isEmpty
+                            ? null
+                            : brandCtrl.text.trim(),
+                        purchasePrice: (price != null && price > 0) ? price : null,
+                        purchaseDate: purchaseDate,
                       ));
                       if (ctx.mounted) Navigator.pop(ctx);
                       _load();
@@ -455,7 +645,6 @@ class _ClothingTabState extends State<ClothingTab> {
     );
   }
 
-  // 카드 → 보관하기 (체크리스트 포함)
   Future<void> _startStore(Clothing c) async {
     StoragePlace? selectedPlace;
     bool washedBefore = false;
@@ -560,8 +749,7 @@ class _ClothingTabState extends State<ClothingTab> {
     );
   }
 
-  Widget _checkTile(
-      String label, bool value, void Function(bool) onChanged) {
+  Widget _checkTile(String label, bool value, void Function(bool) onChanged) {
     return InkWell(
       onTap: () => onChanged(!value),
       child: Padding(
@@ -570,8 +758,7 @@ class _ClothingTabState extends State<ClothingTab> {
           children: [
             Icon(
               value ? Icons.check_box : Icons.check_box_outline_blank,
-              color:
-                  value ? Theme.of(context).colorScheme.primary : Colors.grey,
+              color: value ? Theme.of(context).colorScheme.primary : Colors.grey,
             ),
             const SizedBox(width: 10),
             Text(label, style: const TextStyle(fontSize: 15)),
@@ -581,7 +768,6 @@ class _ClothingTabState extends State<ClothingTab> {
     );
   }
 
-  // 카드 → 꺼내기 (착용 횟수 증가)
   Future<void> _retrieve(Clothing c) async {
     final logs = await _db.getLogsForClothing(c.id!);
     final lastStore =
@@ -686,6 +872,7 @@ class _ClothingTabState extends State<ClothingTab> {
         children: [
           _buildStatusFilter(),
           _buildSeasonFilter(),
+          _buildColorFilter(),
           Expanded(
             child: _all.isEmpty
                 ? _buildEmpty()
@@ -736,6 +923,53 @@ class _ClothingTabState extends State<ClothingTab> {
     );
   }
 
+  Widget _buildColorFilter() {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+      child: Row(
+        children: [
+          _colorFilterChip(null),
+          ...ClothingColor.values.map((c) => Padding(
+                padding: const EdgeInsets.only(left: 6),
+                child: _colorFilterChip(c),
+              )),
+        ],
+      ),
+    );
+  }
+
+  Widget _colorFilterChip(ClothingColor? color) {
+    final selected = _filterColor == color;
+    if (color == null) {
+      return ChoiceChip(
+        label: const Text('전체 색상'),
+        selected: selected,
+        onSelected: (_) {
+          setState(() => _filterColor = null);
+          _load();
+        },
+      );
+    }
+    return FilterChip(
+      avatar: Container(
+        width: 14,
+        height: 14,
+        decoration: BoxDecoration(
+          color: Color(color.colorValue),
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.grey.shade300, width: 0.5),
+        ),
+      ),
+      label: Text(color.label),
+      selected: selected,
+      onSelected: (_) {
+        setState(() => _filterColor = selected ? null : color);
+        _load();
+      },
+    );
+  }
+
   Widget _statusChip(String label, ClothingStatus? status) {
     final selected = _filterStatus == status;
     return ChoiceChip(
@@ -767,26 +1001,69 @@ class _ClothingTabState extends State<ClothingTab> {
         leading: GestureDetector(
           onTap: c.imagePath != null ? () => _showImageDialog(c.imagePath!) : null,
           child: c.imagePath != null
-              ? ClipRRect(
-                  borderRadius: BorderRadius.circular(6),
-                  child: Image.file(File(c.imagePath!),
-                      width: 48, height: 48, fit: BoxFit.cover))
+              ? Stack(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
+                      child: Image.file(File(c.imagePath!),
+                          width: 48, height: 48, fit: BoxFit.cover),
+                    ),
+                    if (c.color != null)
+                      Positioned(
+                        bottom: 0,
+                        right: 0,
+                        child: Container(
+                          width: 13,
+                          height: 13,
+                          decoration: BoxDecoration(
+                            color: Color(c.color!.colorValue),
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 1.5),
+                          ),
+                        ),
+                      ),
+                  ],
+                )
               : Container(
-                  width: 48, height: 48,
+                  width: 48,
+                  height: 48,
                   decoration: BoxDecoration(
-                      color: Colors.grey.shade100,
-                      borderRadius: BorderRadius.circular(6)),
-                  child: Icon(Icons.checkroom, color: Colors.grey.shade400)),
+                    color: c.color != null
+                        ? Color(c.color!.colorValue)
+                        : Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: Colors.grey.shade200),
+                  ),
+                  child: Icon(Icons.checkroom,
+                      color: c.color != null
+                          ? Colors.white.withAlpha(180)
+                          : Colors.grey.shade400)),
         ),
-        title: Text(c.name,
-            style: const TextStyle(fontWeight: FontWeight.w600)),
-        subtitle: Text(
-          [
-            '${c.category.label}  ·  ${c.seasons.map((s) => s.label).join('/')}',
-            if (c.wearCount > 0) '착용 ${c.wearCount}회',
-          ].join('  ·  '),
-          style: const TextStyle(fontSize: 12),
+        title: Text(c.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              [
+                c.category.label,
+                if (c.seasons.isNotEmpty) c.seasons.map((s) => s.label).join('/'),
+                if (c.wearCount > 0) '착용 ${c.wearCount}회',
+              ].join('  ·  '),
+              style: const TextStyle(fontSize: 12),
+            ),
+            if (c.brand != null || c.costPerWear != null)
+              Text(
+                [
+                  if (c.brand != null) c.brand!,
+                  if (c.costPerWear != null)
+                    '착용당 ₩${c.costPerWear!.round()}',
+                ].join('  ·  '),
+                style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+              ),
+          ],
         ),
+        isThreeLine: c.brand != null || c.costPerWear != null,
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [

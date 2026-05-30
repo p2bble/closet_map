@@ -1,11 +1,17 @@
 import 'dart:io';
+import 'dart:typed_data';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/clothing.dart';
 import '../models/outfit.dart';
 import '../services/database_service.dart';
 import '../services/notification_service.dart';
 import '../services/season_service.dart';
+import '../widgets/outfit_share_card.dart';
 
 class HomeTab extends StatefulWidget {
   const HomeTab({super.key});
@@ -61,6 +67,94 @@ class _HomeTabState extends State<HomeTab> {
       '7월', '8월', '9월', '10월', '11월', '12월',
     ];
     return '${months[dt.month - 1]} ${dt.day}일';
+  }
+
+  // ── 코디 공유 미리보기 ────────────────────────
+  Future<void> _showSharePreview(Outfit outfit, List<Clothing> clothes) async {
+    final repaintKey = GlobalKey();
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 32),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ClipRRect(
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(16)),
+              child: RepaintBoundary(
+                key: repaintKey,
+                child: OutfitShareCard(outfit: outfit, clothes: clothes),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: const Text('닫기'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      icon: const Icon(Icons.ios_share, size: 16),
+                      label: const Text('공유하기'),
+                      onPressed: () async {
+                        final bytes = await _captureToBytes(repaintKey);
+                        if (ctx.mounted) Navigator.pop(ctx);
+                        if (bytes != null && mounted) {
+                          await _shareBytes(bytes, outfit.name);
+                        }
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<Uint8List?> _captureToBytes(GlobalKey key) async {
+    try {
+      final boundary =
+          key.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+      if (boundary == null) return null;
+      final image = await boundary.toImage(pixelRatio: 3.0);
+      final byteData =
+          await image.toByteData(format: ui.ImageByteFormat.png);
+      return byteData?.buffer.asUint8List();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _shareBytes(Uint8List bytes, String? outfitName) async {
+    try {
+      final tmpDir = await getTemporaryDirectory();
+      final file = File(
+          '${tmpDir.path}/outfit_${DateTime.now().millisecondsSinceEpoch}.png');
+      await file.writeAsBytes(bytes);
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        text: outfitName != null
+            ? '$outfitName | 옷장지도'
+            : '오늘의 코디 | 옷장지도',
+      );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('공유에 실패했어요.')),
+        );
+      }
+    }
   }
 
   // ── 코디 기록 시트 ────────────────────────────
@@ -437,13 +531,25 @@ class _HomeTabState extends State<HomeTab> {
                   '${clothes.length}가지  ·  ${_formatDate(outfit.createdAt)}',
                   style: const TextStyle(fontSize: 12),
                 ),
-                trailing: IconButton(
-                  icon: const Icon(Icons.delete_outline,
-                      size: 18, color: Colors.grey),
-                  onPressed: () async {
-                    await _db.deleteOutfit(outfit.id!);
-                    _load();
-                  },
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.ios_share,
+                          size: 18, color: Color(0xFF5C8FFF)),
+                      tooltip: '공유',
+                      onPressed: () =>
+                          _showSharePreview(outfit, clothes),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline,
+                          size: 18, color: Colors.grey),
+                      onPressed: () async {
+                        await _db.deleteOutfit(outfit.id!);
+                        _load();
+                      },
+                    ),
+                  ],
                 ),
               ),
             );

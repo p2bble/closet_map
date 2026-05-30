@@ -230,7 +230,7 @@ class _HomeTabState extends State<HomeTab> {
       return;
     }
 
-    await showModalBottomSheet(
+    final result = await showModalBottomSheet<(Outfit, List<Clothing>)?>(
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
@@ -239,19 +239,38 @@ class _HomeTabState extends State<HomeTab> {
       builder: (ctx) => _OutfitBottomSheet(
         clothes: _activeClothes,
         onSave: (selected, name) async {
-          final outfit = Outfit(
-            name: name,
-            createdAt: DateTime.now(),
-          );
+          final now = DateTime.now();
+          final outfit = Outfit(name: name, createdAt: now);
           final outfitId = await _db.insertOutfit(outfit);
+          final savedOutfit =
+              Outfit(id: outfitId, name: name, createdAt: now);
+          final savedClothes = <Clothing>[];
           for (final clothingId in selected) {
             await _db.insertOutfitItem(outfitId, clothingId);
             await _db.incrementWearCount(clothingId);
+            savedClothes.add(
+                _activeClothes.firstWhere((c) => c.id == clothingId));
           }
           _load();
+          return (savedOutfit, savedClothes);
         },
       ),
     );
+
+    if (result != null && mounted) {
+      final (outfit, clothes) = result;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+              outfit.name != null ? '"${outfit.name}" 저장됐어요!' : '코디가 저장됐어요!'),
+          action: SnackBarAction(
+            label: '공유하기',
+            onPressed: () => _showSharePreview(outfit, clothes),
+          ),
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    }
   }
 
   @override
@@ -602,7 +621,7 @@ class _HomeTabState extends State<HomeTab> {
 
 class _OutfitBottomSheet extends StatefulWidget {
   final List<Clothing> clothes;
-  final Future<void> Function(Set<int> selected, String? name) onSave;
+  final Future<(Outfit, List<Clothing>)> Function(Set<int> selected, String? name) onSave;
 
   const _OutfitBottomSheet({required this.clothes, required this.onSave});
 
@@ -837,8 +856,11 @@ class _OutfitBottomSheetState extends State<_OutfitBottomSheet>
                         final name = _nameCtrl.text.trim().isEmpty
                             ? null
                             : _nameCtrl.text.trim();
-                        Navigator.pop(context);
-                        await widget.onSave(_selected, name);
+                        final result =
+                            await widget.onSave(Set.of(_selected), name);
+                        if (!mounted) return;
+                        // ignore: use_build_context_synchronously
+                        Navigator.pop(context, result);
                       },
                 style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 14)),

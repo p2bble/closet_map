@@ -1,5 +1,5 @@
 name: closet_map
-description: "옷장지도 - 내 옷이 어디 있는지, 지금 바로 찾아요"
+description: "옷장지도 - 계절이 바뀌면 내 옷이 어디 있는지 모르는 당신을 위한 보관 위치 기반 옷 관리 앱"
 publish_to: 'none'
 version: 1.5.0+8
 

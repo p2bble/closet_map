@@ -1,8 +1,8 @@
 import 'dart:io';
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -90,28 +90,49 @@ class _HomeTabState extends State<HomeTab> {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-              child: Row(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(ctx),
-                      child: const Text('닫기'),
-                    ),
+                  // 디매 양식 텍스트 복사
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.copy_outlined, size: 16),
+                    label: const Text('디매 양식 텍스트 복사'),
+                    onPressed: () {
+                      final text = _buildOutfitText(clothes);
+                      Clipboard.setData(ClipboardData(text: text));
+                      ScaffoldMessenger.of(ctx).showSnackBar(
+                        const SnackBar(
+                          content: Text('복사됐어요! 디매 게시글에 붙여넣기 하세요.'),
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
+                    },
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      icon: const Icon(Icons.ios_share, size: 16),
-                      label: const Text('공유하기'),
-                      onPressed: () async {
-                        final bytes = await _captureToBytes(repaintKey);
-                        if (ctx.mounted) Navigator.pop(ctx);
-                        if (bytes != null && mounted) {
-                          await _shareBytes(bytes, outfit.name);
-                        }
-                      },
-                    ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          child: const Text('닫기'),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          icon: const Icon(Icons.ios_share, size: 16),
+                          label: const Text('이미지 공유'),
+                          onPressed: () async {
+                            final bytes = await _captureToBytes(repaintKey);
+                            if (ctx.mounted) Navigator.pop(ctx);
+                            if (bytes != null && mounted) {
+                              await _shareBytes(bytes, outfit.name);
+                            }
+                          },
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -155,6 +176,49 @@ class _HomeTabState extends State<HomeTab> {
         );
       }
     }
+  }
+
+  // ── 디매 양식 텍스트 생성 ──────────────────────
+  String _buildOutfitText(List<Clothing> clothes) {
+    final groups = <String, List<Clothing>>{
+      '상의': [],
+      '하의': [],
+      '신발': [],
+      '악세': [],
+    };
+
+    for (final c in clothes) {
+      switch (c.category) {
+        case ClothingCategory.top:
+        case ClothingCategory.outer:
+        case ClothingCategory.underwear:
+        case ClothingCategory.etc:
+          groups['상의']!.add(c);
+        case ClothingCategory.bottom:
+        case ClothingCategory.dress:
+          groups['하의']!.add(c);
+        case ClothingCategory.shoes:
+          groups['신발']!.add(c);
+        case ClothingCategory.accessory:
+          groups['악세']!.add(c);
+      }
+    }
+
+    final lines = <String>[];
+    for (final entry in groups.entries) {
+      if (entry.value.isEmpty) continue;
+      final items = entry.value.map((c) {
+        final brand = c.brand != null && c.brand!.isNotEmpty ? c.brand! : null;
+        return brand != null ? '${c.name} / $brand' : c.name;
+      }).join(', ');
+      lines.add('${entry.key}: $items');
+    }
+
+    lines
+      ..add('')
+      ..add('내용: ');
+
+    return lines.join('\n');
   }
 
   // ── 코디 기록 시트 ────────────────────────────

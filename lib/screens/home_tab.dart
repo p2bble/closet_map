@@ -166,123 +166,26 @@ class _HomeTabState extends State<HomeTab> {
       return;
     }
 
-    final selected = <int>{};
-    final nameCtrl = TextEditingController();
-
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setS) => SizedBox(
-          height: MediaQuery.of(context).size.height * 0.8,
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('오늘의 코디 기록',
-                        style: TextStyle(
-                            fontSize: 18, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: nameCtrl,
-                      decoration: const InputDecoration(
-                        labelText: '코디 이름 (선택)',
-                        hintText: '예: 월요일 출근룩',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      '착용한 옷 선택 (${selected.length}개)',
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w600, fontSize: 14),
-                    ),
-                    const SizedBox(height: 4),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  itemCount: _activeClothes.length,
-                  itemBuilder: (_, i) {
-                    final c = _activeClothes[i];
-                    final isSelected = selected.contains(c.id);
-                    return CheckboxListTile(
-                      value: isSelected,
-                      onChanged: (v) => setS(() =>
-                          v! ? selected.add(c.id!) : selected.remove(c.id)),
-                      secondary: c.imagePath != null
-                          ? ClipRRect(
-                              borderRadius: BorderRadius.circular(4),
-                              child: Image.file(
-                                File(c.imagePath!),
-                                width: 40,
-                                height: 40,
-                                fit: BoxFit.cover,
-                              ),
-                            )
-                          : Container(
-                              width: 40,
-                              height: 40,
-                              decoration: BoxDecoration(
-                                color: c.color != null
-                                    ? Color(c.color!.colorValue)
-                                    : Colors.grey.shade200,
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Icon(Icons.checkroom,
-                                  size: 22, color: Colors.grey.shade400),
-                            ),
-                      title: Text(c.name,
-                          style: const TextStyle(fontSize: 14)),
-                      subtitle: Text(
-                        [
-                          c.category.label,
-                          if (c.color != null) c.color!.label,
-                        ].join(' · '),
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                      controlAffinity: ListTileControlAffinity.trailing,
-                    );
-                  },
-                ),
-              ),
-              Padding(
-                padding: EdgeInsets.fromLTRB(
-                    20, 12, 20, MediaQuery.of(ctx).viewInsets.bottom + 20),
-                child: SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: selected.isEmpty
-                        ? null
-                        : () async {
-                            final outfit = Outfit(
-                              name: nameCtrl.text.trim().isEmpty
-                                  ? null
-                                  : nameCtrl.text.trim(),
-                              createdAt: DateTime.now(),
-                            );
-                            final outfitId = await _db.insertOutfit(outfit);
-                            for (final clothingId in selected) {
-                              await _db.insertOutfitItem(outfitId, clothingId);
-                              await _db.incrementWearCount(clothingId);
-                            }
-                            if (ctx.mounted) Navigator.pop(ctx);
-                            _load();
-                          },
-                    style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 14)),
-                    child: Text('기록 저장 (${selected.length}개)'),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => _OutfitBottomSheet(
+        clothes: _activeClothes,
+        onSave: (selected, name) async {
+          final outfit = Outfit(
+            name: name,
+            createdAt: DateTime.now(),
+          );
+          final outfitId = await _db.insertOutfit(outfit);
+          for (final clothingId in selected) {
+            await _db.insertOutfitItem(outfitId, clothingId);
+            await _db.incrementWearCount(clothingId);
+          }
+          _load();
+        },
       ),
     );
   }
@@ -626,6 +529,260 @@ class _HomeTabState extends State<HomeTab> {
                 style: TextStyle(color: Colors.grey.shade500)),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ── 코디 기록 바텀시트 (카테고리 탭) ──────────────────────────────────────────
+
+class _OutfitBottomSheet extends StatefulWidget {
+  final List<Clothing> clothes;
+  final Future<void> Function(Set<int> selected, String? name) onSave;
+
+  const _OutfitBottomSheet({required this.clothes, required this.onSave});
+
+  @override
+  State<_OutfitBottomSheet> createState() => _OutfitBottomSheetState();
+}
+
+class _OutfitBottomSheetState extends State<_OutfitBottomSheet>
+    with SingleTickerProviderStateMixin {
+  final _nameCtrl = TextEditingController();
+  final _selected = <int>{};
+  late final TabController _tabCtrl;
+
+  static const _tabLabels = ['전체', '상의', '하의', '신발', '악세'];
+
+  // 탭별 카테고리 필터 (null = 전체)
+  static const _tabFilter = <List<ClothingCategory>?>[
+    null,
+    [ClothingCategory.top, ClothingCategory.outer, ClothingCategory.underwear],
+    [ClothingCategory.bottom, ClothingCategory.dress],
+    [ClothingCategory.shoes],
+    [ClothingCategory.accessory],
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _tabCtrl = TabController(length: _tabLabels.length, vsync: this);
+    _tabCtrl.addListener(() => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _tabCtrl.dispose();
+    _nameCtrl.dispose();
+    super.dispose();
+  }
+
+  List<Clothing> _filtered(int idx) {
+    final filter = _tabFilter[idx];
+    if (filter == null) return widget.clothes;
+    return widget.clothes.where((c) => filter.contains(c.category)).toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
+    return SizedBox(
+      height: MediaQuery.of(context).size.height * 0.85,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // 핸들 바
+          Center(
+            child: Container(
+              margin: const EdgeInsets.only(top: 10, bottom: 4),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          // 타이틀 + 코디명 입력
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('오늘의 코디 기록',
+                        style: TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.bold)),
+                    if (_selected.isNotEmpty)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: scheme.primary,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          '${_selected.length}개 선택',
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _nameCtrl,
+                  decoration: const InputDecoration(
+                    labelText: '코디 이름 (선택)',
+                    hintText: '예: 월요일 출근룩',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                ),
+                const SizedBox(height: 4),
+              ],
+            ),
+          ),
+          // 카테고리 탭바
+          TabBar(
+            controller: _tabCtrl,
+            tabs: List.generate(_tabLabels.length, (i) {
+              final count = _filtered(i)
+                  .where((c) => _selected.contains(c.id))
+                  .length;
+              return Tab(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(_tabLabels[i]),
+                    if (count > 0) ...[
+                      const SizedBox(width: 4),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 5, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: scheme.primary,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          '$count',
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              );
+            }),
+            labelStyle:
+                const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+            unselectedLabelStyle: const TextStyle(fontSize: 13),
+            indicatorWeight: 2.5,
+          ),
+          // 탭별 옷 목록
+          Expanded(
+            child: TabBarView(
+              controller: _tabCtrl,
+              children: List.generate(_tabLabels.length, (tabIdx) {
+                final clothes = _filtered(tabIdx);
+                if (clothes.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.checkroom,
+                            size: 40, color: Colors.grey.shade300),
+                        const SizedBox(height: 8),
+                        Text(
+                          '${_tabLabels[tabIdx]} 항목이 없어요',
+                          style: TextStyle(
+                              color: Colors.grey.shade400, fontSize: 14),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+                return ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  itemCount: clothes.length,
+                  itemBuilder: (_, i) {
+                    final c = clothes[i];
+                    final isSelected = _selected.contains(c.id);
+                    return CheckboxListTile(
+                      value: isSelected,
+                      onChanged: (v) => setState(() =>
+                          v! ? _selected.add(c.id!) : _selected.remove(c.id!)),
+                      secondary: c.imagePath != null
+                          ? ClipRRect(
+                              borderRadius: BorderRadius.circular(6),
+                              child: Image.file(
+                                File(c.imagePath!),
+                                width: 44,
+                                height: 44,
+                                fit: BoxFit.cover,
+                              ),
+                            )
+                          : Container(
+                              width: 44,
+                              height: 44,
+                              decoration: BoxDecoration(
+                                color: c.color != null
+                                    ? Color(c.color!.colorValue)
+                                    : Colors.grey.shade200,
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Icon(Icons.checkroom,
+                                  size: 22, color: Colors.grey.shade400),
+                            ),
+                      title: Text(c.name,
+                          style: const TextStyle(fontSize: 14)),
+                      subtitle: Text(
+                        [
+                          c.category.label,
+                          if (c.brand != null && c.brand!.isNotEmpty)
+                            c.brand!,
+                          if (c.color != null) c.color!.label,
+                        ].join(' · '),
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                      controlAffinity: ListTileControlAffinity.trailing,
+                    );
+                  },
+                );
+              }),
+            ),
+          ),
+          // 저장 버튼
+          Padding(
+            padding: EdgeInsets.fromLTRB(
+                20, 8, 20, MediaQuery.of(context).viewInsets.bottom + 20),
+            child: SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _selected.isEmpty
+                    ? null
+                    : () async {
+                        final name = _nameCtrl.text.trim().isEmpty
+                            ? null
+                            : _nameCtrl.text.trim();
+                        Navigator.pop(context);
+                        await widget.onSave(_selected, name);
+                      },
+                style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14)),
+                child: Text('기록 저장 (${_selected.length}개)'),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

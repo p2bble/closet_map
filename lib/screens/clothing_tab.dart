@@ -5,6 +5,9 @@ import 'package:image_picker/image_picker.dart';
 import '../models/clothing.dart';
 import '../models/storage_log.dart';
 import '../models/storage_place.dart';
+import 'package:in_app_review/in_app_review.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../services/analytics_service.dart';
 import '../services/clothing_ai_service.dart';
 import '../services/database_service.dart';
 
@@ -157,6 +160,7 @@ class _ClothingTabState extends State<ClothingTab> {
     ClothingColor? selectedColor;
     DateTime? purchaseDate;
     bool isClassifying = false;
+    bool aiUsed = false;
     ClothingStatus newStatus = ClothingStatus.active;
     StoragePlace? selectedPlace;
 
@@ -234,7 +238,9 @@ class _ClothingTabState extends State<ClothingTab> {
                               setS(() => isClassifying = true);
                               final result =
                                   await ClothingAiService.classify(File(imagePath!));
+                              AnalyticsService.logAiClassificationUsed(success: result != null);
                               if (result != null) {
+                                aiUsed = true;
                                 setS(() {
                                   category = result.category;
                                   seasons..clear()..addAll(result.seasons);
@@ -416,6 +422,20 @@ class _ClothingTabState extends State<ClothingTab> {
                           action: StorageAction.stored,
                           actionAt: DateTime.now(),
                         ));
+                      }
+                      AnalyticsService.logClothingAdded(
+                        category: category.name,
+                        hasImage: imagePath != null,
+                        aiUsed: aiUsed,
+                      );
+                      final prefs = await SharedPreferences.getInstance();
+                      final saveCount = (prefs.getInt('clothing_save_count') ?? 0) + 1;
+                      await prefs.setInt('clothing_save_count', saveCount);
+                      if (saveCount == 3 || saveCount == 10 || saveCount == 25) {
+                        final review = InAppReview.instance;
+                        if (await review.isAvailable()) {
+                          await review.requestReview();
+                        }
                       }
                       if (ctx.mounted) Navigator.pop(ctx);
                       _load();

@@ -41,8 +41,10 @@
 - **sqflite** — 로컬 DB (보관 장소 / 구역 / 옷 / 보관 기록 / 코디)
 - **Firebase AI Logic** (Gemini 2.5 Flash) — 옷 이미지 AI 분류 (카테고리·계절·색상)
 - **Firebase App Check** (Play Integrity) — API 무단 접근 방지
+- **Firebase Analytics** — 탭 전환·옷 등록·AI 분류·코디 기록·계절 전환 이벤트 수집
 - **flutter_local_notifications** — 계절 전환 알림, 방치 옷 알림
-- **shared_preferences** — 알림 중복 방지 날짜 저장
+- **in_app_review** — 옷 3/10/25번째 등록 시점 인앱 리뷰 요청
+- **shared_preferences** — 알림 중복 방지 날짜 저장, 리뷰 요청 카운터
 - **image_picker** — 카메라 / 갤러리 이미지 선택
 - **dart:ui** — 옷장 사진 자연 해상도 기반 구역 좌표 계산
 - **share_plus** — 코디 카드 이미지 외부 공유 (SNS, 카카오, 메시지 등)
@@ -101,6 +103,7 @@ lib/
 ├── services/
 │   ├── database_service.dart    # sqflite DB CRUD (v4: 색상·브랜드·코디 테이블 포함)
 │   ├── clothing_ai_service.dart # Gemini AI 옷 분류 (색상 추출 포함)
+│   ├── analytics_service.dart   # Firebase Analytics 이벤트 래퍼
 │   ├── season_service.dart      # 계절 판단 로직
 │   └── notification_service.dart# 계절 전환 / 방치 옷 알림
 ├── widgets/
@@ -120,6 +123,7 @@ lib/
 
 | 버전 | 내용 |
 |---|---|
+| v1.5.1 | Firebase Analytics 연동 (탭 전환·옷 등록·AI 분류·코디 기록·계절 전환 이벤트), 인앱 리뷰 요청 (옷 3/10/25번째 등록 시점) |
 | v1.5.0 | 코디 기록 시트 상의·하의·신발·악세 탭 분리, 디매 양식 텍스트 자동 생성 및 클립보드 복사, 저장 직후 공유 유도 스낵바 |
 | v1.4.2 | 코디 공유 카드 — 옷 이미지 그리드·브랜드 칩·총 구매가·평균 CPW가 담긴 카드 이미지 생성 후 SNS 바로 공유 |
 | v1.4.1 | 앱 이름 표시 오류 수정, 시즌 기준 조정(봄 3~4월·여름 5~8월·가을 9~10월), 앱 아이콘 비율 수정 |
@@ -135,7 +139,7 @@ lib/
 
 [![Google Play](https://img.shields.io/badge/Google_Play-출시완료-414141?style=for-the-badge&logo=google-play&logoColor=white)](https://play.google.com/store/apps/details?id=com.p2bble.closet_map)
 
-> 최신 버전: v1.5.0 — 코디 기록 탭 분리 · 디매 양식 텍스트 복사 · 저장 후 공유 유도
+> 최신 버전: v1.5.1 — Firebase Analytics 연동 · 인앱 리뷰 요청
 
 <br>
 

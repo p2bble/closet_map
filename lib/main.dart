@@ -7,6 +7,7 @@ import 'screens/home_tab.dart';
 import 'screens/place_tab.dart';
 import 'screens/clothing_tab.dart';
 import 'screens/season_tab.dart';
+import 'services/analytics_service.dart';
 import 'services/notification_service.dart';
 
 void main() async {
@@ -86,7 +87,11 @@ class _MainShellState extends State<MainShell> {
       body: IndexedStack(index: _index, children: _tabs),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
-        onDestinationSelected: (i) => setState(() => _index = i),
+        onDestinationSelected: (i) {
+          setState(() => _index = i);
+          const names = ['home', 'places', 'clothes', 'season'];
+          AnalyticsService.logTabViewed(names[i]);
+        },
         destinations: List.generate(
           4,
           (i) => NavigationDestination(

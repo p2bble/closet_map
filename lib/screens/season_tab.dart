@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import '../models/clothing.dart';
 import '../models/storage_place.dart';
+import '../services/analytics_service.dart';
 import '../services/database_service.dart';
 
 class SeasonTab extends StatefulWidget {
@@ -125,6 +126,7 @@ class _SeasonTabState extends State<SeasonTab>
                                   ? null
                                   : noteCtrl.text.trim(),
                             );
+                            AnalyticsService.logSeasonTransition(direction: 'store', count: 1);
                             if (ctx.mounted) Navigator.pop(ctx);
                             _load();
                           },
@@ -215,6 +217,7 @@ class _SeasonTabState extends State<SeasonTab>
                                   ? null
                                   : noteCtrl.text.trim(),
                             );
+                            AnalyticsService.logSeasonTransition(direction: 'store', count: ids.length);
                             if (ctx.mounted) Navigator.pop(ctx);
                             setState(() => _selectedStore.clear());
                             _load();
@@ -251,6 +254,7 @@ class _SeasonTabState extends State<SeasonTab>
     );
     if (confirm != true) return;
     await _db.bulkRetrieve([c.id!]);
+    AnalyticsService.logSeasonTransition(direction: 'retrieve', count: 1);
     _load();
   }
 
@@ -275,6 +279,7 @@ class _SeasonTabState extends State<SeasonTab>
     );
     if (confirm != true) return;
     await _db.bulkRetrieve(ids);
+    AnalyticsService.logSeasonTransition(direction: 'retrieve', count: ids.length);
     setState(() => _selectedRetrieve.clear());
     _load();
   }

@@ -8,6 +8,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/clothing.dart';
 import '../models/outfit.dart';
+import '../services/analytics_service.dart';
 import '../services/database_service.dart';
 import '../services/notification_service.dart';
 import '../services/season_service.dart';
@@ -251,6 +252,7 @@ class _HomeTabState extends State<HomeTab> {
             savedClothes.add(
                 _activeClothes.firstWhere((c) => c.id == clothingId));
           }
+          AnalyticsService.logOutfitRecorded(clothesCount: savedClothes.length);
           _load();
           return (savedOutfit, savedClothes);
         },

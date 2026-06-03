@@ -2,8 +2,10 @@ import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'firebase_options.dart';
 import 'screens/home_tab.dart';
+import 'screens/onboarding_screen.dart';
 import 'screens/place_tab.dart';
 import 'screens/clothing_tab.dart';
 import 'screens/season_tab.dart';
@@ -38,8 +40,47 @@ class ClosetMapApp extends StatelessWidget {
         useMaterial3: true,
         cardTheme: const CardThemeData(elevation: 1),
       ),
-      home: const MainShell(),
+      home: const _AppEntry(),
     );
+  }
+}
+
+class _AppEntry extends StatefulWidget {
+  const _AppEntry();
+
+  @override
+  State<_AppEntry> createState() => _AppEntryState();
+}
+
+class _AppEntryState extends State<_AppEntry> {
+  bool? _showOnboarding;
+
+  @override
+  void initState() {
+    super.initState();
+    _check();
+  }
+
+  Future<void> _check() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (mounted) {
+      setState(() {
+        _showOnboarding = !(prefs.getBool('onboarding_done') ?? false);
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_showOnboarding == null) {
+      return const Scaffold(body: SizedBox.shrink());
+    }
+    if (_showOnboarding!) {
+      return OnboardingScreen(
+        onDone: () => setState(() => _showOnboarding = false),
+      );
+    }
+    return const MainShell();
   }
 }
 

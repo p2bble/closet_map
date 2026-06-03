@@ -109,6 +109,7 @@ lib/
 ├── widgets/
 │   └── outfit_share_card.dart  # 코디 공유 카드 위젯 (이미지 그리드·브랜드·CPW)
 └── screens/
+    ├── onboarding_screen.dart   # 첫 실행 온보딩 (3페이지 슬라이드)
     ├── home_tab.dart            # 홈 (계절 요약 + 코디 기록 + 방치 옷 배너 + 공유)
     ├── place_tab.dart           # 보관 장소 목록/편집
     ├── place_detail_screen.dart # 장소별 구역 맵 또는 보관 옷 목록
@@ -123,6 +124,7 @@ lib/
 
 | 버전 | 내용 |
 |---|---|
+| v1.6.0 | 온보딩 플로우 추가 — 첫 실행 시 3페이지 슬라이드로 핵심 기능 안내 (보관 위치 추적·구역 맵·AI 분류) |
 | v1.5.1 | Firebase Analytics 연동 (탭 전환·옷 등록·AI 분류·코디 기록·계절 전환 이벤트), 인앱 리뷰 요청 (옷 3/10/25번째 등록 시점) |
 | v1.5.0 | 코디 기록 시트 상의·하의·신발·악세 탭 분리, 디매 양식 텍스트 자동 생성 및 클립보드 복사, 저장 직후 공유 유도 스낵바 |
 | v1.4.2 | 코디 공유 카드 — 옷 이미지 그리드·브랜드 칩·총 구매가·평균 CPW가 담긴 카드 이미지 생성 후 SNS 바로 공유 |
@@ -139,7 +141,7 @@ lib/
 
 [![Google Play](https://img.shields.io/badge/Google_Play-출시완료-414141?style=for-the-badge&logo=google-play&logoColor=white)](https://play.google.com/store/apps/details?id=com.p2bble.closet_map)
 
-> 최신 버전: v1.5.1 — Firebase Analytics 연동 · 인앱 리뷰 요청
+> 최신 버전: v1.6.0 — 온보딩 플로우 추가
 
 <br>
 

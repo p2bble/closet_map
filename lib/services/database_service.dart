@@ -22,7 +22,7 @@ class DatabaseService {
     final dbPath = await getDatabasesPath();
     return openDatabase(
       join(dbPath, 'closet_map.db'),
-      version: 4,
+      version: 5,
       onCreate: (db, _) async {
         await db.execute('''
           CREATE TABLE storage_places (
@@ -66,6 +66,7 @@ class DatabaseService {
             created_at TEXT NOT NULL,
             wear_count INTEGER NOT NULL DEFAULT 0,
             last_worn_at TEXT,
+            wear_count_since_wash INTEGER NOT NULL DEFAULT 0,
             FOREIGN KEY (storage_place_id) REFERENCES storage_places(id),
             FOREIGN KEY (storage_zone_id) REFERENCES storage_zones(id)
           )
@@ -148,6 +149,11 @@ class DatabaseService {
               FOREIGN KEY (clothing_id) REFERENCES clothes(id)
             )
           ''');
+        }
+        if (oldVersion < 5) {
+          await db.execute(
+            'ALTER TABLE clothes ADD COLUMN wear_count_since_wash INTEGER NOT NULL DEFAULT 0',
+          );
         }
       },
     );
@@ -322,9 +328,25 @@ class DatabaseService {
 
   Future<void> incrementWearCount(int id) async =>
       (await db).rawUpdate(
-        'UPDATE clothes SET wear_count = wear_count + 1, last_worn_at = ? WHERE id = ?',
+        'UPDATE clothes SET wear_count = wear_count + 1, wear_count_since_wash = wear_count_since_wash + 1, last_worn_at = ? WHERE id = ?',
         [DateTime.now().toIso8601String(), id],
       );
+
+  Future<void> markAsWashed(int id) async =>
+      (await db).rawUpdate(
+        'UPDATE clothes SET wear_count_since_wash = 0 WHERE id = ?',
+        [id],
+      );
+
+  Future<List<Clothing>> getLaundryNeededClothes({int threshold = 3}) async {
+    final rows = await (await db).rawQuery('''
+      SELECT * FROM clothes
+      WHERE status = ${ClothingStatus.active.index}
+      AND wear_count_since_wash >= ?
+      ORDER BY wear_count_since_wash DESC
+    ''', [threshold]);
+    return rows.map(Clothing.fromMap).toList();
+  }
 
   Future<void> updateClothing(Clothing c) async =>
       (await db).update('clothes', c.toMap(), where: 'id = ?', whereArgs: [c.id]);

@@ -97,6 +97,7 @@ class Clothing {
   final DateTime createdAt;
   final int wearCount;
   final DateTime? lastWornAt;
+  final int wearCountSinceWash;
 
   const Clothing({
     this.id,
@@ -116,6 +117,7 @@ class Clothing {
     required this.createdAt,
     this.wearCount = 0,
     this.lastWornAt,
+    this.wearCountSinceWash = 0,
   });
 
   bool get isStored => status == ClothingStatus.stored;
@@ -144,6 +146,7 @@ class Clothing {
     Object? storageNote = _absent,
     int? wearCount,
     Object? lastWornAt = _absent,
+    int? wearCountSinceWash,
   }) {
     return Clothing(
       id: id ?? this.id,
@@ -163,6 +166,7 @@ class Clothing {
       createdAt: createdAt,
       wearCount: wearCount ?? this.wearCount,
       lastWornAt: lastWornAt == _absent ? this.lastWornAt : lastWornAt as DateTime?,
+      wearCountSinceWash: wearCountSinceWash ?? this.wearCountSinceWash,
     );
   }
 
@@ -184,6 +188,7 @@ class Clothing {
         'created_at': createdAt.toIso8601String(),
         'wear_count': wearCount,
         'last_worn_at': lastWornAt?.toIso8601String(),
+        'wear_count_since_wash': wearCountSinceWash,
       };
 
   factory Clothing.fromMap(Map<String, dynamic> m) {
@@ -217,6 +222,7 @@ class Clothing {
       lastWornAt: m['last_worn_at'] != null
           ? DateTime.tryParse(m['last_worn_at'] as String)
           : null,
+      wearCountSinceWash: (m['wear_count_since_wash'] as int?) ?? 0,
     );
   }
 }

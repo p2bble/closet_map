@@ -23,8 +23,11 @@ class HomeTab extends StatefulWidget {
 
 class _HomeTabState extends State<HomeTab> {
   final _db = DatabaseService();
+  static const _laundryThreshold = 3;
+
   List<Clothing> _activeClothes = [];
   List<Clothing> _neglectedClothes = [];
+  List<Clothing> _laundryClothes = [];
   List<(Outfit, List<Clothing>)> _recentOutfits = [];
   bool _loading = true;
 
@@ -37,16 +40,29 @@ class _HomeTabState extends State<HomeTab> {
   Future<void> _load() async {
     final all = await _db.getClothes(status: ClothingStatus.active);
     final neglected = await _db.getNeglectedClothes();
+    final laundry = await _db.getLaundryNeededClothes(threshold: _laundryThreshold);
     final outfits = await _db.getRecentOutfits(limit: 3);
     if (mounted) {
       setState(() {
         _activeClothes = all;
         _neglectedClothes = neglected;
+        _laundryClothes = laundry;
         _recentOutfits = outfits;
         _loading = false;
       });
     }
     _checkNeglectedNotification(neglected.length);
+    _checkLaundryNotification(laundry.length);
+  }
+
+  Future<void> _checkLaundryNotification(int count) async {
+    if (count == 0) return;
+    final prefs = await SharedPreferences.getInstance();
+    final today = DateTime.now().toIso8601String().substring(0, 10);
+    final lastDate = prefs.getString('last_laundry_notify_date');
+    if (lastDate == today) return;
+    await NotificationService().showLaundryAlert(count);
+    await prefs.setString('last_laundry_notify_date', today);
   }
 
   Future<void> _checkNeglectedNotification(int count) async {
@@ -286,6 +302,7 @@ class _HomeTabState extends State<HomeTab> {
           const SizedBox(height: 16),
           _buildSummaryRow(),
           const SizedBox(height: 16),
+          _buildLaundrySection(),
           _buildNeglectedSection(),
           _buildOutfitSection(),
           _buildActiveSection(),
@@ -365,6 +382,110 @@ class _HomeTabState extends State<HomeTab> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  // ── 세탁 알림 섹션 ───────────────────────────
+  Widget _buildLaundrySection() {
+    if (_laundryClothes.isEmpty) return const SizedBox.shrink();
+    return Card(
+      color: Colors.blue.shade50,
+      margin: const EdgeInsets.only(bottom: 16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => _showLaundrySheet(),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.local_laundry_service,
+                      color: Colors.blue, size: 18),
+                  const SizedBox(width: 6),
+                  Text(
+                    '세탁이 필요한 옷 ${_laundryClothes.length}벌',
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w600, fontSize: 14),
+                  ),
+                  const Spacer(),
+                  const Icon(Icons.chevron_right,
+                      color: Colors.blue, size: 18),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '$_laundryThreshold회 이상 입은 옷이 있어요. 세탁 후 상쾌하게 입어보세요!',
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                height: 60,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: _laundryClothes.length,
+                  separatorBuilder: (_, _) => const SizedBox(width: 8),
+                  itemBuilder: (_, i) {
+                    final c = _laundryClothes[i];
+                    return Column(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(4),
+                          child: c.imagePath != null
+                              ? Image.file(
+                                  File(c.imagePath!),
+                                  width: 38,
+                                  height: 38,
+                                  fit: BoxFit.cover,
+                                )
+                              : Container(
+                                  width: 38,
+                                  height: 38,
+                                  color: c.color != null
+                                      ? Color(c.color!.colorValue)
+                                      : Colors.grey.shade200,
+                                  child: Icon(Icons.checkroom,
+                                      size: 20,
+                                      color: Colors.grey.shade400),
+                                ),
+                        ),
+                        const SizedBox(height: 2),
+                        SizedBox(
+                          width: 42,
+                          child: Text(
+                            c.name,
+                            style: const TextStyle(fontSize: 9),
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showLaundrySheet() async {
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => _LaundryBottomSheet(
+        clothes: _laundryClothes,
+        onWashed: (id) async {
+          await _db.markAsWashed(id);
+          _load();
+        },
       ),
     );
   }
@@ -614,6 +735,125 @@ class _HomeTabState extends State<HomeTab> {
                 style: TextStyle(color: Colors.grey.shade500)),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ── 세탁 바텀시트 ────────────────────────────────────────────────────────────
+
+class _LaundryBottomSheet extends StatefulWidget {
+  final List<Clothing> clothes;
+  final Future<void> Function(int id) onWashed;
+
+  const _LaundryBottomSheet({required this.clothes, required this.onWashed});
+
+  @override
+  State<_LaundryBottomSheet> createState() => _LaundryBottomSheetState();
+}
+
+class _LaundryBottomSheetState extends State<_LaundryBottomSheet> {
+  final _washedIds = <int>{};
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      initialChildSize: 0.6,
+      maxChildSize: 0.9,
+      minChildSize: 0.4,
+      expand: false,
+      builder: (_, controller) => Column(
+        children: [
+          Center(
+            child: Container(
+              margin: const EdgeInsets.only(top: 10, bottom: 8),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+            child: Row(
+              children: [
+                const Icon(Icons.local_laundry_service, color: Colors.blue),
+                const SizedBox(width: 8),
+                const Text('세탁 필요한 옷',
+                    style:
+                        TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                const Spacer(),
+                Text('${widget.clothes.length}벌',
+                    style: TextStyle(
+                        color: Colors.grey.shade500, fontSize: 14)),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          Expanded(
+            child: ListView.builder(
+              controller: controller,
+              itemCount: widget.clothes.length,
+              itemBuilder: (_, i) {
+                final c = widget.clothes[i];
+                final done = _washedIds.contains(c.id);
+                return ListTile(
+                  leading: ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: c.imagePath != null
+                        ? Image.file(
+                            File(c.imagePath!),
+                            width: 48,
+                            height: 48,
+                            fit: BoxFit.cover,
+                          )
+                        : Container(
+                            width: 48,
+                            height: 48,
+                            color: c.color != null
+                                ? Color(c.color!.colorValue)
+                                : Colors.grey.shade200,
+                            child: Icon(Icons.checkroom,
+                                size: 24, color: Colors.grey.shade400),
+                          ),
+                  ),
+                  title: Text(c.name,
+                      style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          decoration: done
+                              ? TextDecoration.lineThrough
+                              : null,
+                          color: done ? Colors.grey : null)),
+                  subtitle: Text(
+                    '${c.wearCountSinceWash}회 착용 · ${c.category.label}',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  trailing: done
+                      ? const Icon(Icons.check_circle,
+                          color: Colors.blue, size: 28)
+                      : OutlinedButton(
+                          onPressed: () async {
+                            await widget.onWashed(c.id!);
+                            setState(() => _washedIds.add(c.id!));
+                          },
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.blue,
+                            side: const BorderSide(color: Colors.blue),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 4),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          child: const Text('세탁 완료',
+                              style: TextStyle(fontSize: 12)),
+                        ),
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }

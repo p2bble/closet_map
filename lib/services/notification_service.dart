@@ -42,4 +42,22 @@ class NotificationService {
       details,
     );
   }
+
+  Future<void> showLaundryAlert(int count) async {
+    const details = NotificationDetails(
+      android: AndroidNotificationDetails(
+        'laundry_needed',
+        '세탁 알림',
+        channelDescription: '세탁이 필요한 옷 알림',
+        importance: Importance.defaultImportance,
+        priority: Priority.defaultPriority,
+      ),
+    );
+    await _plugin.show(
+      3,
+      '옷장지도',
+      '세탁이 필요한 옷이 $count벌 있어요. 세탁 후 상쾌하게 입어보세요!',
+      details,
+    );
+  }
 }

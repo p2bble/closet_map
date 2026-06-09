@@ -14,7 +14,9 @@
 | 📦 보관 장소 관리 | 사진·이름·메모로 옷장/박스/수납장 등록 및 편집 |
 | 🗺️ 옷장 구역 맵 | 옷장 사진 위에 서랍·행거·선반 구역을 드래그로 그리고, 구역별 보관 옷 한눈에 확인 |
 | 🔄 계절 전환 | 보관 전 체크리스트(세탁·상태·방충제) + 꺼낼 때 이전 보관 기록 확인 |
-| ⚠️ 방치 옷 알림 | 6개월 이상 꺼내지 않은 옷을 홈 배너 + 로컬 알림으로 안내 |
+| ⚠️ 미세탁 경고 | 세탁하지 않고 보관한 옷을 꺼낼 때 경고 메시지 표시 (개별·일괄 모두 지원) |
+| 🧺 세탁 필요 뱃지 | 3회 이상 착용한 옷에 세탁 필요 뱃지 표시 — 보관 전 세탁 자연스럽게 유도 |
+| ⚠️ 방치 옷 알림 | 현재 계절 옷 중 6개월 이상 꺼내지 않은 옷을 홈 배너 + 로컬 알림으로 안내 |
 
 **편의 기능 — 등록 & 분류**
 
@@ -81,10 +83,14 @@ flutter run
 
 # 릴리스 AAB 빌드 (Play Store용)
 flutter build appbundle --release
+
+# Play Store 자동 업로드
+python upload_play.py
 ```
 
 > **서명 설정:** `android/key.properties` 파일 필요 (Git에서 제외됨)  
-> **Firebase 설정:** `android/app/google-services.json` 필요
+> **Firebase 설정:** `android/app/google-services.json` 필요  
+> **Play Store 업로드:** `service-account.json` 필요 (Git에서 제외됨)
 
 <br>
 
@@ -101,7 +107,7 @@ lib/
 │   ├── storage_zone.dart        # 구역 모델 (사진 위 상대 좌표 0-1)
 │   └── storage_log.dart         # 보관/꺼내기 로그 모델
 ├── services/
-│   ├── database_service.dart    # sqflite DB CRUD (v4: 색상·브랜드·코디 테이블 포함)
+│   ├── database_service.dart    # sqflite DB CRUD (v5: wear_count_since_wash·미세탁 경고 쿼리 포함)
 │   ├── clothing_ai_service.dart # Gemini AI 옷 분류 (색상 추출 포함)
 │   ├── analytics_service.dart   # Firebase Analytics 이벤트 래퍼
 │   ├── season_service.dart      # 계절 판단 로직
@@ -124,6 +130,7 @@ lib/
 
 | 버전 | 내용 |
 |---|---|
+| v1.7.1 | 보관 관리 개선 — 꺼낼 때 미세탁 보관 경고(개별·일괄), 세탁 필요 뱃지, 방치 알림 계절 필터(오탐 제거), 꺼내기 시 착용 횟수 자동 증가 버그 수정 |
 | v1.6.0 | 온보딩 플로우 추가 — 첫 실행 시 3페이지 슬라이드로 핵심 기능 안내 (보관 위치 추적·구역 맵·AI 분류) |
 | v1.5.1 | Firebase Analytics 연동 (탭 전환·옷 등록·AI 분류·코디 기록·계절 전환 이벤트), 인앱 리뷰 요청 (옷 3/10/25번째 등록 시점) |
 | v1.5.0 | 코디 기록 시트 상의·하의·신발·악세 탭 분리, 디매 양식 텍스트 자동 생성 및 클립보드 복사, 저장 직후 공유 유도 스낵바 |
@@ -141,7 +148,7 @@ lib/
 
 [![Google Play](https://img.shields.io/badge/Google_Play-출시완료-414141?style=for-the-badge&logo=google-play&logoColor=white)](https://play.google.com/store/apps/details?id=com.p2bble.closet_map)
 
-> 최신 버전: v1.6.0 — 온보딩 플로우 추가
+> 최신 버전: v1.7.1 — 보관 관리 개선 (미세탁 경고·세탁 뱃지·방치 알림 정확도 향상)
 
 <br>
 

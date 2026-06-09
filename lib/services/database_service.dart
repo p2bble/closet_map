@@ -285,15 +285,14 @@ class DatabaseService {
 
   Future<void> bulkRetrieve(List<int> ids) async {
     final d = await db;
-    final now = DateTime.now().toIso8601String();
+    final now = DateTime.now().toIso8601String(); // storage_logs action_at 용
     await d.transaction((txn) async {
       for (final id in ids) {
         await txn.rawUpdate('''
           UPDATE clothes
-          SET status = ?, storage_place_id = NULL, storage_zone_id = NULL,
-              wear_count = wear_count + 1, last_worn_at = ?
+          SET status = ?, storage_place_id = NULL, storage_zone_id = NULL
           WHERE id = ?
-        ''', [ClothingStatus.active.index, now, id]);
+        ''', [ClothingStatus.active.index, id]);
         await txn.insert('storage_logs', {
           'clothing_id': id,
           'storage_place_id': null,
@@ -308,22 +307,48 @@ class DatabaseService {
     });
   }
 
-  Future<List<Clothing>> getNeglectedClothes() async {
+  Future<List<Clothing>> getNeglectedClothes({ClothingSeason? forSeason}) async {
     final sixMonthsAgo = DateTime.now()
         .subtract(const Duration(days: 180))
         .toIso8601String();
     final oneYearAgo = DateTime.now()
         .subtract(const Duration(days: 365))
         .toIso8601String();
+    final seasonFilter = forSeason != null
+        ? "AND (seasons LIKE '%${forSeason.index}%' OR seasons LIKE '%${ClothingSeason.all.index}%')"
+        : '';
     final rows = await (await db).rawQuery('''
       SELECT * FROM clothes
-      WHERE status = ${ClothingStatus.active.index} AND (
+      WHERE status = ${ClothingStatus.active.index}
+      $seasonFilter
+      AND (
         (wear_count = 0 AND created_at < ?) OR
         (wear_count > 0 AND (last_worn_at IS NULL OR last_worn_at < ?))
       )
       ORDER BY created_at ASC
     ''', [sixMonthsAgo, oneYearAgo]);
     return rows.map(Clothing.fromMap).toList();
+  }
+
+  Future<StorageLog?> getLastStoreLog(int clothingId) async {
+    final rows = await (await db).query(
+      'storage_logs',
+      where: 'clothing_id = ? AND action = ?',
+      whereArgs: [clothingId, StorageAction.stored.index],
+      orderBy: 'action_at DESC',
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return StorageLog.fromMap(rows.first);
+  }
+
+  Future<List<int>> getUnwashedStoredIds(List<int> clothingIds) async {
+    final result = <int>[];
+    for (final id in clothingIds) {
+      final log = await getLastStoreLog(id);
+      if (log != null && log.washedBefore == false) result.add(id);
+    }
+    return result;
   }
 
   Future<void> incrementWearCount(int id) async =>

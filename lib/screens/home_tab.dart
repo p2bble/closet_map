@@ -39,7 +39,9 @@ class _HomeTabState extends State<HomeTab> {
 
   Future<void> _load() async {
     final all = await _db.getClothes(status: ClothingStatus.active);
-    final neglected = await _db.getNeglectedClothes();
+    final neglected = await _db.getNeglectedClothes(
+      forSeason: SeasonService.currentSeason(),
+    );
     final laundry = await _db.getLaundryNeededClothes(threshold: _laundryThreshold);
     final outfits = await _db.getRecentOutfits(limit: 3);
     if (mounted) {

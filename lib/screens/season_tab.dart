@@ -237,11 +237,45 @@ class _SeasonTabState extends State<SeasonTab>
 
   // ── 개별 꺼내기 ───────────────────────────────
   Future<void> _retrieve(Clothing c) async {
+    final lastLog = await _db.getLastStoreLog(c.id!);
+    final isUnwashed = lastLog?.washedBefore == false;
+    if (!mounted) return;
+
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text('${c.name} 꺼내기'),
-        content: const Text('착용 중으로 전환할까요?'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('착용 중으로 전환할까요?'),
+            if (isUnwashed) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.orange.shade200),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.warning_amber_rounded,
+                        color: Colors.orange.shade700, size: 18),
+                    const SizedBox(width: 8),
+                    const Expanded(
+                      child: Text(
+                        '세탁하지 않고 보관된 옷이에요.\n착용 전 상태를 확인해보세요.',
+                        style: TextStyle(fontSize: 13),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
@@ -261,12 +295,62 @@ class _SeasonTabState extends State<SeasonTab>
   // ── 일괄 꺼내기 ───────────────────────────────
   Future<void> _bulkRetrieve() async {
     final ids = List<int>.from(_selectedRetrieve);
+    final unwashedIds = await _db.getUnwashedStoredIds(ids);
+    final unwashedClothes = _storedClothes
+        .where((c) => unwashedIds.contains(c.id))
+        .toList();
+    if (!mounted) return;
+
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text('${ids.length}벌 꺼내기'),
-        content: Text(
-            '선택한 ${ids.length}벌을 모두 착용 중으로 전환할까요?\n착용 횟수가 각각 1씩 올라가요.'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('선택한 ${ids.length}벌을 모두 착용 중으로 전환할까요?'),
+            if (unwashedClothes.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.orange.shade200),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.warning_amber_rounded,
+                            color: Colors.orange.shade700, size: 18),
+                        const SizedBox(width: 8),
+                        Text(
+                          '세탁 없이 보관된 옷 ${unwashedClothes.length}벌',
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w600, fontSize: 13),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    ...unwashedClothes.map((c) => Text(
+                          '· ${c.name}',
+                          style: const TextStyle(fontSize: 12),
+                        )),
+                    const SizedBox(height: 4),
+                    Text(
+                      '착용 전 상태를 확인해보세요.',
+                      style: TextStyle(
+                          fontSize: 12, color: Colors.grey.shade600),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
@@ -463,13 +547,44 @@ class _SeasonTabState extends State<SeasonTab>
                     children: [
                       Text(c.name,
                           style: const TextStyle(fontWeight: FontWeight.w600)),
-                      Text(
-                        [
-                          c.category.label,
-                          if (c.color != null) c.color!.label,
-                        ].join(' · '),
-                        style: TextStyle(
-                            fontSize: 12, color: Colors.grey.shade600),
+                      const SizedBox(height: 2),
+                      Row(
+                        children: [
+                          Text(
+                            [
+                              c.category.label,
+                              if (c.color != null) c.color!.label,
+                            ].join(' · '),
+                            style: TextStyle(
+                                fontSize: 12, color: Colors.grey.shade600),
+                          ),
+                          if (c.wearCountSinceWash >= 3) ...[
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 5, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.orange.shade100,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.local_laundry_service,
+                                      size: 10,
+                                      color: Colors.orange.shade700),
+                                  const SizedBox(width: 2),
+                                  Text(
+                                    '세탁 필요',
+                                    style: TextStyle(
+                                        fontSize: 10,
+                                        color: Colors.orange.shade700),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     ],
                   ),

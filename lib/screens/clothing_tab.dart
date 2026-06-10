@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../services/analytics_service.dart';
 import '../services/clothing_ai_service.dart';
 import '../services/database_service.dart';
+import '../services/image_store.dart';
 
 class ClothingTab extends StatefulWidget {
   const ClothingTab({super.key});
@@ -33,11 +34,13 @@ class _ClothingTabState extends State<ClothingTab> {
   @override
   void initState() {
     super.initState();
+    _db.addListener(_load);
     _load();
   }
 
   @override
   void dispose() {
+    _db.removeListener(_load);
     _searchCtrl.dispose();
     super.dispose();
   }
@@ -207,9 +210,13 @@ class _ClothingTabState extends State<ClothingTab> {
                       source: source == 'camera'
                           ? ImageSource.camera
                           : ImageSource.gallery,
+                      maxWidth: 1024,
                       imageQuality: 85,
                     );
-                    if (xfile != null) setS(() => imagePath = xfile.path);
+                    if (xfile != null) {
+                      final saved = await ImageStore.persist(xfile);
+                      setS(() => imagePath = saved);
+                    }
                   },
                   child: Container(
                     height: 100, width: double.infinity,
@@ -493,9 +500,13 @@ class _ClothingTabState extends State<ClothingTab> {
                       source: source == 'camera'
                           ? ImageSource.camera
                           : ImageSource.gallery,
+                      maxWidth: 1024,
                       imageQuality: 85,
                     );
-                    if (xfile != null) setS(() => imagePath = xfile.path);
+                    if (xfile != null) {
+                      final saved = await ImageStore.persist(xfile);
+                      setS(() => imagePath = saved);
+                    }
                   },
                   child: Container(
                     height: 100, width: double.infinity,
@@ -660,6 +671,9 @@ class _ClothingTabState extends State<ClothingTab> {
                         purchasePrice: (price != null && price > 0) ? price : null,
                         purchaseDate: purchaseDate,
                       ));
+                      if (imagePath != c.imagePath) {
+                        await ImageStore.deleteIfExists(c.imagePath);
+                      }
                       if (ctx.mounted) Navigator.pop(ctx);
                       _load();
                     },

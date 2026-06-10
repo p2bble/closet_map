@@ -18,19 +18,30 @@ class ClothingAiResult {
 }
 
 class ClothingAiService {
+  // responseSchema(JSON 모드)로 출력 형식을 강제해 파싱 실패를 차단
   static final _model = FirebaseAI.googleAI().generativeModel(
     model: 'gemini-2.5-flash',
+    generationConfig: GenerationConfig(
+      responseMimeType: 'application/json',
+      responseSchema: Schema.object(properties: {
+        'category': Schema.enumString(enumValues: [
+          '상의', '하의', '아우터', '원피스세트', '이너속옷', '신발', '가방악세서리', '기타',
+        ]),
+        'seasons': Schema.array(
+          items: Schema.enumString(
+              enumValues: ['봄', '여름', '가을', '겨울', '사계절']),
+        ),
+        'color': Schema.enumString(enumValues: [
+          '흰색', '검정', '회색', '베이지', '갈색', '빨강', '주황',
+          '노랑', '초록', '파랑', '남색', '보라', '분홍', '기타',
+        ]),
+        'name': Schema.string(description: '옷 이름 제안 (예: 흰색 면 티셔츠, 검정 청바지)'),
+      }),
+    ),
   );
 
   static const _prompt = '''
-이 옷 사진을 분석해서 아래 JSON 형식으로만 응답해. 설명 없이 JSON만 반환해.
-
-{
-  "category": "상의" | "하의" | "아우터" | "원피스세트" | "이너속옷" | "신발" | "가방악세서리" | "기타",
-  "seasons": ["봄", "여름", "가을", "겨울", "사계절"] 중 해당하는 것 배열,
-  "color": "흰색" | "검정" | "회색" | "베이지" | "갈색" | "빨강" | "주황" | "노랑" | "초록" | "파랑" | "남색" | "보라" | "분홍" | "기타",
-  "name": "옷 이름 제안 (예: 흰색 면 티셔츠, 검정 청바지)"
-}
+이 옷 사진을 분석해서 카테고리, 어울리는 계절(복수 가능), 대표 색상, 옷 이름 제안을 알려줘.
 ''';
 
   static Future<ClothingAiResult?> classify(File imageFile) async {
@@ -41,12 +52,7 @@ class ClothingAiService {
         Content.multi([imagePart, TextPart(_prompt)]),
       ]);
 
-      final raw = response.text ?? '';
-      final jsonStr = raw
-          .replaceAll('```json', '')
-          .replaceAll('```', '')
-          .trim();
-      final data = jsonDecode(jsonStr) as Map<String, dynamic>;
+      final data = jsonDecode(response.text ?? '') as Map<String, dynamic>;
 
       return ClothingAiResult(
         category: _toCategory(data['category'] as String? ?? ''),

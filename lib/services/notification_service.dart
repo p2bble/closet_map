@@ -10,6 +10,11 @@ class NotificationService {
   Future<void> init() async {
     const android = AndroidInitializationSettings('@mipmap/ic_launcher');
     await _plugin.initialize(const InitializationSettings(android: android));
+    // Android 13(API 33)+ 는 런타임 권한 없이는 알림이 표시되지 않음
+    await _plugin
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>()
+        ?.requestNotificationsPermission();
   }
 
   Future<void> showSeasonChangeAlert(String message) async {

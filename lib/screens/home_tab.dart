@@ -34,7 +34,14 @@ class _HomeTabState extends State<HomeTab> {
   @override
   void initState() {
     super.initState();
+    _db.addListener(_load);
     _load();
+  }
+
+  @override
+  void dispose() {
+    _db.removeListener(_load);
+    super.dispose();
   }
 
   Future<void> _load() async {

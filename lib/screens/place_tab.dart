@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../models/storage_place.dart';
 import '../services/database_service.dart';
+import '../services/image_store.dart';
 import 'place_detail_screen.dart';
 import 'zone_editor_screen.dart';
 
@@ -21,7 +22,14 @@ class _PlaceTabState extends State<PlaceTab> {
   @override
   void initState() {
     super.initState();
+    _db.addListener(_load);
     _load();
+  }
+
+  @override
+  void dispose() {
+    _db.removeListener(_load);
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -49,9 +57,15 @@ class _PlaceTabState extends State<PlaceTab> {
               children: [
                 GestureDetector(
                   onTap: () async {
-                    final xfile = await ImagePicker()
-                        .pickImage(source: ImageSource.gallery);
-                    if (xfile != null) setS(() => imagePath = xfile.path);
+                    final xfile = await ImagePicker().pickImage(
+                      source: ImageSource.gallery,
+                      maxWidth: 1920,
+                      imageQuality: 85,
+                    );
+                    if (xfile != null) {
+                      final saved = await ImageStore.persist(xfile);
+                      setS(() => imagePath = saved);
+                    }
                   },
                   child: Container(
                     height: 120,
@@ -160,9 +174,15 @@ class _PlaceTabState extends State<PlaceTab> {
               children: [
                 GestureDetector(
                   onTap: () async {
-                    final xfile = await ImagePicker()
-                        .pickImage(source: ImageSource.gallery);
-                    if (xfile != null) setS(() => imagePath = xfile.path);
+                    final xfile = await ImagePicker().pickImage(
+                      source: ImageSource.gallery,
+                      maxWidth: 1920,
+                      imageQuality: 85,
+                    );
+                    if (xfile != null) {
+                      final saved = await ImageStore.persist(xfile);
+                      setS(() => imagePath = saved);
+                    }
                   },
                   child: Container(
                     height: 120,
@@ -218,6 +238,9 @@ class _PlaceTabState extends State<PlaceTab> {
                   imagePath: imagePath,
                   memo: memoCtrl.text.trim().isEmpty ? null : memoCtrl.text.trim(),
                 ));
+                if (imagePath != place.imagePath) {
+                  await ImageStore.deleteIfExists(place.imagePath);
+                }
                 if (ctx.mounted) Navigator.pop(ctx);
                 _load();
               },

@@ -36,11 +36,13 @@ class _SeasonTabState extends State<SeasonTab>
         });
       }
     });
+    _db.addListener(_load);
     _load();
   }
 
   @override
   void dispose() {
+    _db.removeListener(_load);
     _tabs.dispose();
     super.dispose();
   }

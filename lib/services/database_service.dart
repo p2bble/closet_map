@@ -18,6 +18,15 @@ class DatabaseService extends ChangeNotifier {
   Database? _db;
   bool _notifyScheduled = false;
 
+  /// 백업/복원 등 외부에서 데이터가 통째로 바뀌었을 때 호출
+  void notifyDataChanged() => _changed();
+
+  /// DB 연결을 닫는다 (백업 전 WAL 반영, 복원 시 파일 교체용). 다음 접근 시 자동 재오픈.
+  Future<void> close() async {
+    await _db?.close();
+    _db = null;
+  }
+
   /// 연속 변경(일괄 처리 루프 등)을 마이크로태스크 단위로 묶어 한 번만 알림
   void _changed() {
     if (_notifyScheduled) return;

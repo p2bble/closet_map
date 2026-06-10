@@ -13,6 +13,7 @@ import 'screens/place_tab.dart';
 import 'screens/clothing_tab.dart';
 import 'screens/season_tab.dart';
 import 'services/analytics_service.dart';
+import 'services/backup_service.dart';
 import 'services/database_service.dart';
 import 'services/notification_service.dart';
 import 'services/season_service.dart';
@@ -119,6 +120,42 @@ class MainShell extends StatefulWidget {
 class _MainShellState extends State<MainShell> {
   int _index = 0;
 
+  void _showSnack(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
+  Future<void> _onMenuSelected(String value) async {
+    if (value == 'backup') {
+      final err = await BackupService.exportBackup();
+      if (err != null) _showSnack(err);
+      return;
+    }
+    if (value == 'restore') {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('백업에서 복원'),
+          content: const Text(
+              '현재 앱의 모든 데이터(옷·보관 장소·사진·코디 기록)가 '
+              '백업 파일의 내용으로 교체됩니다.\n계속할까요?'),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('취소')),
+            ElevatedButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('복원')),
+          ],
+        ),
+      );
+      if (ok != true) return;
+      final err = await BackupService.importBackup();
+      if (err == 'cancelled') return;
+      _showSnack(err ?? '복원이 완료됐어요!');
+    }
+  }
+
   static const _tabs = [
     HomeTab(),
     PlaceTab(),
@@ -149,6 +186,34 @@ class _MainShellState extends State<MainShell> {
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
         centerTitle: false,
+        actions: [
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert),
+            onSelected: _onMenuSelected,
+            itemBuilder: (_) => const [
+              PopupMenuItem(
+                value: 'backup',
+                child: Row(
+                  children: [
+                    Icon(Icons.backup_outlined, size: 20),
+                    SizedBox(width: 10),
+                    Text('백업 만들기'),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'restore',
+                child: Row(
+                  children: [
+                    Icon(Icons.restore, size: 20),
+                    SizedBox(width: 10),
+                    Text('백업에서 복원'),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
       body: IndexedStack(index: _index, children: _tabs),
       bottomNavigationBar: NavigationBar(

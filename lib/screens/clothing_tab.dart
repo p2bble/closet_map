@@ -1349,17 +1349,59 @@ class _ClothingTabState extends State<ClothingTab> {
   }
 
   Widget _buildEmpty() {
+    final hasFilter = _filterStatus != null ||
+        _filterSeason != null ||
+        _filterColor != null ||
+        _searchQuery.isNotEmpty;
+
+    // 필터·검색 결과가 없는 경우 — 등록 유도 대신 조건 변경 안내
+    if (hasFilter) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.search_off, size: 48, color: Colors.grey.shade300),
+            const SizedBox(height: 12),
+            Text('조건에 맞는 옷이 없어요',
+                style: TextStyle(fontSize: 15, color: Colors.grey.shade500)),
+            const SizedBox(height: 4),
+            Text('필터나 검색어를 바꿔보세요',
+                style: TextStyle(fontSize: 13, color: Colors.grey.shade400)),
+          ],
+        ),
+      );
+    }
+
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.checkroom, size: 64, color: Colors.grey.shade300),
-          const SizedBox(height: 16),
-          Text('등록된 옷이 없어요',
-              style: TextStyle(fontSize: 16, color: Colors.grey.shade500)),
+          Container(
+            width: 92,
+            height: 92,
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.primaryContainer,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.checkroom,
+                size: 44, color: Theme.of(context).colorScheme.primary),
+          ),
+          const SizedBox(height: 18),
+          const Text('아직 등록된 옷이 없어요',
+              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
           const SizedBox(height: 6),
-          Text('아래 버튼으로 첫 번째 옷을 등록해보세요',
-              style: TextStyle(fontSize: 13, color: Colors.grey.shade400)),
+          Text('사진 한 장이면 AI가 카테고리·계절·색상을\n알아서 채워줘요',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                  fontSize: 13.5,
+                  color: Colors.grey.shade500,
+                  height: 1.6)),
+          const SizedBox(height: 22),
+          FilledButton.icon(
+            onPressed: _showAddSheet,
+            icon: const Icon(Icons.photo_camera_outlined, size: 18),
+            label: const Text('사진으로 첫 옷 등록'),
+          ),
         ],
       ),
     );

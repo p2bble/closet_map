@@ -1,10 +1,16 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/clothing.dart';
+import '../models/storage_log.dart';
 import '../models/storage_place.dart';
 import '../services/analytics_service.dart';
 import '../services/database_service.dart';
+import '../services/season_service.dart';
 
+// ════════════════════════════════════════════════════════════
+// 계절 허브 — 전환 진행률 · 보관/꺼내기 · 체크리스트 · 지난 보관 기록
+// ════════════════════════════════════════════════════════════
 class SeasonTab extends StatefulWidget {
   const SeasonTab({super.key});
 
@@ -12,30 +18,25 @@ class SeasonTab extends StatefulWidget {
   State<SeasonTab> createState() => _SeasonTabState();
 }
 
-class _SeasonTabState extends State<SeasonTab>
-    with SingleTickerProviderStateMixin {
-  late final TabController _tabs;
+class _SeasonTabState extends State<SeasonTab> {
   final _db = DatabaseService();
 
   List<Clothing> _activeClothes = [];
   List<Clothing> _storedClothes = [];
   List<StoragePlace> _places = [];
+  List<StorageLog> _recentLogs = [];
+  int _doneThisSeason = 0;
+  List<bool> _checklist = [false, false, false];
 
-  final _selectedStore = <int>{};
-  final _selectedRetrieve = <int>{};
+  static const _checklistLabels = [
+    '보관할 옷 세탁하기',
+    '얼룩·보풀 상태 확인',
+    '방충제·제습제 넣기',
+  ];
 
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 2, vsync: this);
-    _tabs.addListener(() {
-      if (_tabs.indexIsChanging) {
-        setState(() {
-          _selectedStore.clear();
-          _selectedRetrieve.clear();
-        });
-      }
-    });
     _db.addListener(_load);
     _load();
   }
@@ -43,18 +44,413 @@ class _SeasonTabState extends State<SeasonTab>
   @override
   void dispose() {
     _db.removeListener(_load);
-    _tabs.dispose();
     super.dispose();
+  }
+
+  // 시즌이 바뀌면 키가 달라져서 체크리스트가 자동 초기화됨
+  String _checkKey(int i) {
+    final start = SeasonService.currentSeasonStart();
+    return 'season_checklist_${SeasonService.currentSeason().name}_${start.year}_$i';
   }
 
   Future<void> _load() async {
     final active = await _db.getClothes(status: ClothingStatus.active);
     final stored = await _db.getClothes(status: ClothingStatus.stored);
     final places = await _db.getPlaces();
+    final logs = await _db.getRecentStoreLogs(limit: 3);
+    final done = await _db.countLogsSince(SeasonService.currentSeasonStart());
+    final prefs = await SharedPreferences.getInstance();
+    final checklist =
+        List.generate(3, (i) => prefs.getBool(_checkKey(i)) ?? false);
     if (mounted) {
       setState(() {
         _activeClothes = active;
         _storedClothes = stored;
+        _places = places;
+        _recentLogs = logs;
+        _doneThisSeason = done;
+        _checklist = checklist;
+      });
+    }
+  }
+
+  // 계절이 지나 보관해야 할 옷 / 이번 계절인데 아직 보관 중인 옷
+  List<Clothing> get _storePending => _activeClothes
+      .where((c) => !SeasonService.matchesCurrent(c.seasons))
+      .toList();
+  List<Clothing> get _retrievePending => _storedClothes
+      .where((c) => SeasonService.matchesCurrent(c.seasons))
+      .toList();
+
+  Future<void> _toggleCheck(int i) async {
+    final prefs = await SharedPreferences.getInstance();
+    final v = !_checklist[i];
+    await prefs.setBool(_checkKey(i), v);
+    if (mounted) setState(() => _checklist[i] = v);
+  }
+
+  String _formatDate(DateTime dt) {
+    final base = '${dt.month}월 ${dt.day}일';
+    return dt.year == DateTime.now().year ? base : '${dt.year}년 $base';
+  }
+
+  void _openAction(bool isStore) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => SeasonActionScreen(isStore: isStore)),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          _buildProgressCard(),
+          const SizedBox(height: 12),
+          _buildActionCards(),
+          const SizedBox(height: 12),
+          _buildChecklistCard(),
+          const SizedBox(height: 12),
+          _buildRecentLogsCard(),
+        ],
+      ),
+    );
+  }
+
+  // ── 전환 진행 카드 ────────────────────────────
+  Widget _buildProgressCard() {
+    final t = SeasonService.currentTheme();
+    final cur = SeasonService.currentSeason();
+    final prev = SeasonService.prevSeason();
+    final remaining = _storePending.length + _retrievePending.length;
+    final total = _doneThisSeason + remaining;
+    final isDone = remaining == 0;
+    final progress = total == 0 ? 1.0 : _doneThisSeason / total;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: t.tint,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(t.icon, size: 20, color: t.accent),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  isDone
+                      ? '${cur.label} 시즌 준비 완료'
+                      : '${prev.label} → ${cur.label} 전환 중',
+                  style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: t.deep),
+                ),
+              ),
+              if (total > 0)
+                Text('$_doneThisSeason / $total벌',
+                    style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                        color: t.deep)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: progress,
+              minHeight: 8,
+              backgroundColor: Colors.white.withAlpha(178),
+              color: t.accent,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            isDone
+                ? '옷장이 ${cur.label}에 맞게 정리돼 있어요'
+                : '$remaining벌만 더 정리하면 ${cur.label} 준비 끝이에요',
+            style: TextStyle(fontSize: 12.5, color: t.deep.withAlpha(217)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── 보관하기 / 꺼내기 카드 ────────────────────
+  Widget _buildActionCards() {
+    final t = SeasonService.currentTheme();
+
+    Widget card({
+      required IconData icon,
+      required Color tint,
+      required Color color,
+      required String title,
+      required String sub,
+      required VoidCallback onTap,
+    }) {
+      return Expanded(
+        child: Card(
+          margin: EdgeInsets.zero,
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: tint,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(icon, size: 20, color: color),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(title,
+                      style: const TextStyle(
+                          fontSize: 15, fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 2),
+                  Text(sub,
+                      style: TextStyle(
+                          fontSize: 12, color: Colors.grey.shade600)),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Row(
+      children: [
+        card(
+          icon: Icons.archive_outlined,
+          tint: const Color(0xFFEDF2FC),
+          color: const Color(0xFF3D6BC4),
+          title: '보관하기',
+          sub: '계절 지난 옷 ${_storePending.length}벌 대기',
+          onTap: () => _openAction(true),
+        ),
+        const SizedBox(width: 10),
+        card(
+          icon: Icons.unarchive_outlined,
+          tint: t.tint,
+          color: t.deep,
+          title: '꺼내기',
+          sub: '이번 계절 옷 ${_retrievePending.length}벌 보관 중',
+          onTap: () => _openAction(false),
+        ),
+      ],
+    );
+  }
+
+  // ── 보관 전 체크리스트 ────────────────────────
+  Widget _buildChecklistCard() {
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 14, 16, 4),
+            child: Text('보관 전 체크리스트',
+                style:
+                    TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          ),
+          ...List.generate(_checklistLabels.length, (i) {
+            final done = _checklist[i];
+            return InkWell(
+              onTap: () => _toggleCheck(i),
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+                child: Row(
+                  children: [
+                    Icon(
+                      done ? Icons.check_circle : Icons.radio_button_unchecked,
+                      size: 20,
+                      color: done
+                          ? const Color(0xFF3CA56A)
+                          : Colors.grey.shade400,
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      _checklistLabels[i],
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: done ? Colors.grey.shade500 : null,
+                        decoration:
+                            done ? TextDecoration.lineThrough : null,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }),
+          const SizedBox(height: 6),
+        ],
+      ),
+    );
+  }
+
+  // ── 지난 보관 기록 — "그 패딩 어디 넣었더라"의 답 ──
+  Widget _buildRecentLogsCard() {
+    final all = [..._activeClothes, ..._storedClothes];
+    final rows = <Widget>[];
+    for (final log in _recentLogs) {
+      final c = all.where((x) => x.id == log.clothingId).firstOrNull;
+      if (c == null) continue;
+      final place =
+          _places.where((p) => p.id == log.storagePlaceId).firstOrNull;
+      rows.add(Padding(
+        padding: const EdgeInsets.only(top: 12),
+        child: Row(
+          children: [
+            _clothThumb(c),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(c.name,
+                      style: const TextStyle(
+                          fontSize: 14, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 2),
+                  Row(
+                    children: [
+                      Icon(Icons.location_on,
+                          size: 13, color: Colors.grey.shade500),
+                      const SizedBox(width: 2),
+                      Expanded(
+                        child: Text(
+                          '${place?.name ?? '장소 미지정'} · ${_formatDate(log.actionAt)}',
+                          style: TextStyle(
+                              fontSize: 12, color: Colors.grey.shade600),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ));
+    }
+
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('지난 보관 기록',
+                style:
+                    TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            if (rows.isEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 10),
+                child: Text(
+                  '옷을 보관하면 어디에 뒀는지\n여기서 바로 찾을 수 있어요',
+                  style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.grey.shade500,
+                      height: 1.5),
+                ),
+              )
+            else
+              ...rows,
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _clothThumb(Clothing c) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: c.imagePath != null
+          ? Image.file(File(c.imagePath!),
+              width: 48, height: 48, fit: BoxFit.cover)
+          : Container(
+              width: 48,
+              height: 48,
+              color: c.color != null
+                  ? Color(c.color!.colorValue)
+                  : Colors.grey.shade200,
+              child: Icon(Icons.checkroom,
+                  size: 22,
+                  color: c.color != null
+                      ? Colors.white.withAlpha(217)
+                      : Colors.grey.shade400),
+            ),
+    );
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// 보관하기 / 꺼내기 리스트 화면 (허브에서 push)
+// ════════════════════════════════════════════════════════════
+class SeasonActionScreen extends StatefulWidget {
+  final bool isStore;
+
+  const SeasonActionScreen({super.key, required this.isStore});
+
+  @override
+  State<SeasonActionScreen> createState() => _SeasonActionScreenState();
+}
+
+class _SeasonActionScreenState extends State<SeasonActionScreen> {
+  final _db = DatabaseService();
+
+  List<Clothing> _clothes = [];
+  List<StoragePlace> _places = [];
+  final _selected = <int>{};
+
+  @override
+  void initState() {
+    super.initState();
+    _db.addListener(_load);
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _db.removeListener(_load);
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    final list = await _db.getClothes(
+        status:
+            widget.isStore ? ClothingStatus.active : ClothingStatus.stored);
+    if (widget.isStore) {
+      // 계절 지난 옷(보관 대상)을 위로
+      list.sort((a, b) {
+        final ap = SeasonService.matchesCurrent(a.seasons) ? 1 : 0;
+        final bp = SeasonService.matchesCurrent(b.seasons) ? 1 : 0;
+        return ap.compareTo(bp);
+      });
+    }
+    final places = await _db.getPlaces();
+    if (mounted) {
+      setState(() {
+        _clothes = list;
         _places = places;
       });
     }
@@ -152,7 +548,7 @@ class _SeasonTabState extends State<SeasonTab>
     bool conditionGood = true;
     bool mothballAdded = false;
     final noteCtrl = TextEditingController();
-    final ids = List<int>.from(_selectedStore);
+    final ids = List<int>.from(_selected);
 
     await showModalBottomSheet(
       context: context,
@@ -221,7 +617,7 @@ class _SeasonTabState extends State<SeasonTab>
                             );
                             AnalyticsService.logSeasonTransition(direction: 'store', count: ids.length);
                             if (ctx.mounted) Navigator.pop(ctx);
-                            setState(() => _selectedStore.clear());
+                            setState(() => _selected.clear());
                             _load();
                           },
                     style: ElevatedButton.styleFrom(
@@ -296,11 +692,10 @@ class _SeasonTabState extends State<SeasonTab>
 
   // ── 일괄 꺼내기 ───────────────────────────────
   Future<void> _bulkRetrieve() async {
-    final ids = List<int>.from(_selectedRetrieve);
+    final ids = List<int>.from(_selected);
     final unwashedIds = await _db.getUnwashedStoredIds(ids);
-    final unwashedClothes = _storedClothes
-        .where((c) => unwashedIds.contains(c.id))
-        .toList();
+    final unwashedClothes =
+        _clothes.where((c) => unwashedIds.contains(c.id)).toList();
     if (!mounted) return;
 
     final confirm = await showDialog<bool>(
@@ -366,7 +761,7 @@ class _SeasonTabState extends State<SeasonTab>
     if (confirm != true) return;
     await _db.bulkRetrieve(ids);
     AnalyticsService.logSeasonTransition(direction: 'retrieve', count: ids.length);
-    setState(() => _selectedRetrieve.clear());
+    setState(() => _selected.clear());
     _load();
   }
 
@@ -444,10 +839,9 @@ class _SeasonTabState extends State<SeasonTab>
   }
 
   // ── 일괄 액션 바 ───────────────────────────────
-  Widget _buildBulkBar({required bool isStore}) {
-    final selected = isStore ? _selectedStore : _selectedRetrieve;
-    if (selected.isEmpty) return const SizedBox.shrink();
-    final count = selected.length;
+  Widget _buildBulkBar() {
+    if (_selected.isEmpty) return const SizedBox.shrink();
+    final count = _selected.length;
 
     return Container(
       color: Theme.of(context).colorScheme.primaryContainer,
@@ -465,13 +859,13 @@ class _SeasonTabState extends State<SeasonTab>
             ),
             const Spacer(),
             TextButton(
-              onPressed: () => setState(() => selected.clear()),
+              onPressed: () => setState(() => _selected.clear()),
               child: const Text('선택 해제'),
             ),
             const SizedBox(width: 8),
             ElevatedButton(
-              onPressed: isStore ? _bulkStoreSheet : _bulkRetrieve,
-              child: Text(isStore ? '일괄 보관' : '일괄 꺼내기'),
+              onPressed: widget.isStore ? _bulkStoreSheet : _bulkRetrieve,
+              child: Text(widget.isStore ? '일괄 보관' : '일괄 꺼내기'),
             ),
           ],
         ),
@@ -481,43 +875,26 @@ class _SeasonTabState extends State<SeasonTab>
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Container(
-          color: Theme.of(context).colorScheme.surface,
-          child: TabBar(
-            controller: _tabs,
-            tabs: [
-              Tab(text: '보관하기 (${_activeClothes.length})'),
-              Tab(text: '꺼내기 (${_storedClothes.length})'),
-            ],
-          ),
+    final isStore = widget.isStore;
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          isStore ? '보관하기 (${_clothes.length})' : '꺼내기 (${_clothes.length})',
+          style: const TextStyle(fontWeight: FontWeight.bold),
         ),
-        Expanded(
-          child: TabBarView(
-            controller: _tabs,
-            children: [
-              Column(
-                children: [
-                  Expanded(child: _buildStoreList()),
-                  _buildBulkBar(isStore: true),
-                ],
-              ),
-              Column(
-                children: [
-                  Expanded(child: _buildRetrieveList()),
-                  _buildBulkBar(isStore: false),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ],
+      ),
+      body: Column(
+        children: [
+          Expanded(
+              child: isStore ? _buildStoreList() : _buildRetrieveList()),
+          _buildBulkBar(),
+        ],
+      ),
     );
   }
 
   Widget _buildStoreList() {
-    if (_activeClothes.isEmpty) {
+    if (_clothes.isEmpty) {
       return Center(
         child: Text('착용 중인 옷이 없어요',
             style: TextStyle(color: Colors.grey.shade500)),
@@ -525,10 +902,11 @@ class _SeasonTabState extends State<SeasonTab>
     }
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-      itemCount: _activeClothes.length,
+      itemCount: _clothes.length,
       itemBuilder: (_, i) {
-        final c = _activeClothes[i];
-        final isChecked = _selectedStore.contains(c.id);
+        final c = _clothes[i];
+        final isChecked = _selected.contains(c.id);
+        final offSeason = !SeasonService.matchesCurrent(c.seasons);
         return Card(
           margin: const EdgeInsets.only(bottom: 8),
           child: Padding(
@@ -538,7 +916,7 @@ class _SeasonTabState extends State<SeasonTab>
                 Checkbox(
                   value: isChecked,
                   onChanged: (v) => setState(() =>
-                      v! ? _selectedStore.add(c.id!) : _selectedStore.remove(c.id!)),
+                      v! ? _selected.add(c.id!) : _selected.remove(c.id!)),
                   visualDensity: VisualDensity.compact,
                 ),
                 _clothingAvatar(c),
@@ -560,31 +938,14 @@ class _SeasonTabState extends State<SeasonTab>
                             style: TextStyle(
                                 fontSize: 12, color: Colors.grey.shade600),
                           ),
+                          if (offSeason) ...[
+                            const SizedBox(width: 6),
+                            _miniBadge('계절 지남', Colors.blueGrey),
+                          ],
                           if (c.wearCountSinceWash >= 3) ...[
                             const SizedBox(width: 6),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 5, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: Colors.orange.shade100,
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.local_laundry_service,
-                                      size: 10,
-                                      color: Colors.orange.shade700),
-                                  const SizedBox(width: 2),
-                                  Text(
-                                    '세탁 필요',
-                                    style: TextStyle(
-                                        fontSize: 10,
-                                        color: Colors.orange.shade700),
-                                  ),
-                                ],
-                              ),
-                            ),
+                            _miniBadge('세탁 필요', Colors.orange,
+                                icon: Icons.local_laundry_service),
                           ],
                         ],
                       ),
@@ -607,8 +968,31 @@ class _SeasonTabState extends State<SeasonTab>
     );
   }
 
+  Widget _miniBadge(String label, MaterialColor color, {IconData? icon}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.shade100,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 10, color: color.shade700),
+            const SizedBox(width: 2),
+          ],
+          Text(
+            label,
+            style: TextStyle(fontSize: 10, color: color.shade700),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildRetrieveList() {
-    if (_storedClothes.isEmpty) {
+    if (_clothes.isEmpty) {
       return Center(
         child: Text('보관 중인 옷이 없어요',
             style: TextStyle(color: Colors.grey.shade500)),
@@ -616,12 +1000,12 @@ class _SeasonTabState extends State<SeasonTab>
     }
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-      itemCount: _storedClothes.length,
+      itemCount: _clothes.length,
       itemBuilder: (_, i) {
-        final c = _storedClothes[i];
+        final c = _clothes[i];
         final place =
             _places.where((p) => p.id == c.storagePlaceId).firstOrNull;
-        final isChecked = _selectedRetrieve.contains(c.id);
+        final isChecked = _selected.contains(c.id);
         return Card(
           margin: const EdgeInsets.only(bottom: 8),
           child: Padding(
@@ -630,9 +1014,8 @@ class _SeasonTabState extends State<SeasonTab>
               children: [
                 Checkbox(
                   value: isChecked,
-                  onChanged: (v) => setState(() => v!
-                      ? _selectedRetrieve.add(c.id!)
-                      : _selectedRetrieve.remove(c.id!)),
+                  onChanged: (v) => setState(() =>
+                      v! ? _selected.add(c.id!) : _selected.remove(c.id!)),
                   visualDensity: VisualDensity.compact,
                 ),
                 _clothingAvatar(c),
@@ -643,10 +1026,20 @@ class _SeasonTabState extends State<SeasonTab>
                     children: [
                       Text(c.name,
                           style: const TextStyle(fontWeight: FontWeight.w600)),
-                      Text(
-                        place != null ? '📍 ${place.name}' : '장소 미지정',
-                        style: TextStyle(
-                            fontSize: 12, color: Colors.grey.shade600),
+                      Row(
+                        children: [
+                          Icon(Icons.location_on,
+                              size: 12, color: Colors.grey.shade500),
+                          const SizedBox(width: 2),
+                          Expanded(
+                            child: Text(
+                              place != null ? place.name : '장소 미지정',
+                              style: TextStyle(
+                                  fontSize: 12, color: Colors.grey.shade600),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),

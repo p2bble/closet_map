@@ -497,6 +497,25 @@ class DatabaseService extends ChangeNotifier {
     return rows.map(StorageLog.fromMap).toList();
   }
 
+  /// 최근 보관 기록 (계절 허브 "지난 보관 기록"용)
+  Future<List<StorageLog>> getRecentStoreLogs({int limit = 3}) async {
+    final rows = await (await db).query('storage_logs',
+        where: 'action = ?',
+        whereArgs: [StorageAction.stored.index],
+        orderBy: 'action_at DESC',
+        limit: limit);
+    return rows.map(StorageLog.fromMap).toList();
+  }
+
+  /// 특정 시점 이후의 보관/꺼내기 횟수 (계절 전환 진행률용)
+  Future<int> countLogsSince(DateTime since) async {
+    final rows = await (await db).rawQuery(
+      'SELECT COUNT(*) AS cnt FROM storage_logs WHERE action_at >= ?',
+      [since.toIso8601String()],
+    );
+    return (rows.first['cnt'] as int?) ?? 0;
+  }
+
   Future<int> countByPlace(int placeId) async {
     final result = await (await db).rawQuery(
         'SELECT COUNT(*) as cnt FROM clothes WHERE storage_place_id = ? AND status = ?',

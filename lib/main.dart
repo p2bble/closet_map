@@ -156,25 +156,25 @@ class _MainShellState extends State<MainShell> {
     }
   }
 
-  static const _tabs = [
-    HomeTab(),
-    PlaceTab(),
-    ClothingTab(),
-    SeasonTab(),
+  late final List<Widget> _tabs = [
+    HomeTab(onGoToTab: (i) => setState(() => _index = i)),
+    const PlaceTab(),
+    const ClothingTab(),
+    const SeasonTab(),
   ];
 
-  static const _labels = ['홈', '보관 장소', '내 옷', '계절 전환'];
+  static const _labels = ['홈', '보관 장소', '내 옷', '계절'];
   static const _icons = [
     Icons.home_outlined,
     Icons.inventory_2_outlined,
     Icons.checkroom_outlined,
-    Icons.swap_horiz,
+    Icons.autorenew,
   ];
   static const _activeIcons = [
     Icons.home,
     Icons.inventory_2,
     Icons.checkroom,
-    Icons.swap_horiz,
+    Icons.autorenew,
   ];
 
   @override
